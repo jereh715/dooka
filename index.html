@@ -3,51 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dooka app</title>
+    <title>Dooka</title>
     <style>
-        body { font-family: sans-serif; margin: 0; background: #f4f7f6; }
-        #update-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255, 255, 255, 0.9);
-            z-index: 1000;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --bg: #f4f7f6;
         }
-        .container { padding: 40px; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 70px; }
+        
+        /* Navigation */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background: white; display: flex; justify-content: space-around;
+            padding: 15px 0; border-top: 1px solid #ddd; z-index: 100;
+        }
+        .nav-item { cursor: pointer; color: #7f8c8d; font-weight: bold; text-align: center; flex: 1; }
+        .nav-item.active { color: var(--accent); }
+
+        /* Views */
+        .view { display: none; padding: 20px; }
+        .view.active { display: block; }
+
+        /* Dev Form */
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input, button { display: block; width: 100%; margin: 10px 0; padding: 12px; border-radius: 5px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: var(--accent); }
+
+        #status-msg { margin-top: 10px; font-size: 0.9em; color: var(--accent); text-align: center; }
     </style>
 </head>
 <body>
 
-    <div id="update-overlay">
-        <h2>Updating Dooka...</h2>
-        <p>Please wait while we sync your modules.</p>
+    <div id="home" class="view active">
+        <h1>Dooka Dashboard</h1>
+        <div class="card">
+            <p>Welcome to the core system.</p>
+            <p>Status: <span style="color: green;">Ready</span></p>
+        </div>
     </div>
 
-    <div class="container" id="main-content">
-        <h1> Welcome Dooka</h1>
-        <p>Ready work.</p>
+    <div id="dev" class="view">
+        <h1>Developer Portal</h1>
+        <div class="card">
+            <h3>Upload Module Folder</h3>
+            <p style="font-size: 0.8em; color: #666;">Compress your module folder into a .zip before uploading.</p>
+            
+            <input type="text" id="moduleName" placeholder="Module Name (e.g. pos_system)">
+            <input type="file" id="moduleZip" accept=".zip">
+            
+            <button onclick="publishModule()">Push to GitHub Modules</button>
+            <div id="status-msg"></div>
+        </div>
     </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-item active" onclick="switchView('home', this)">HOME</div>
+        <div class="nav-item" onclick="switchView('dev', this)">DEV</div>
+    </nav>
 
     <script>
-        async function checkInitialStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-                
-                if (data.is_updating) {
-                    document.getElementById('update-overlay').style.display = 'flex';
-                    document.getElementById('main-content').style.opacity = '0.3';
-                }
-            } catch (e) {
-                console.log("Offline or server initializing.");
-            }
+        // Tab Switching Logic
+        function switchView(viewId, el) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            
+            document.getElementById(viewId).classList.add('active');
+            el.classList.add('active');
         }
 
-        // Run ONCE on load. No setInterval.
-        window.onload = checkInitialStatus;
+        // Module Upload Logic
+        async function publishModule() {
+            const name = document.getElementById('moduleName').value;
+            const fileInput = document.getElementById('moduleZip');
+            const status = document.getElementById('status-msg');
+
+            if (!name || !fileInput.files[0]) {
+                status.innerText = "❌ Please provide a name and a .zip file.";
+                return;
+            }
+
+            status.innerText = "⏳ Syncing with GitHub...";
+            const formData = new FormData();
+            formData.append('module_name', name);
+            formData.append('module_zip', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/api/upload-module', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    status.innerText = "✅ " + result.message;
+                } else {
+                    status.innerText = "❌ Error: " + result.error;
+                }
+            } catch (e) {
+                status.innerText = "❌ Connection to Python backend failed.";
+            }
+        }
     </script>
 </body>
 </html>

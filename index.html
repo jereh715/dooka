@@ -3,33 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dooka Super App</title>
+    <title>Dooka Dashboard</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f7f6;
-            color: #333;
-        }
-        .container {
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        #update-banner { 
+            display: none; 
+            background: #e3f2fd; 
+            color: #0d47a1; 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin-bottom: 10px;
             text-align: center;
-            padding: 2rem;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        h1 { color: #2c3e50; }
-        p { color: #7f8c8d; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Hello</h1>
-        <p>Your modular offline-first ecosystem is ready.</p>
+
+    <div id="update-banner">
+        New update found! Refreshing to apply changes...
     </div>
+
+    <div class="card">
+        <h1>Welcome to Dooka</h1>
+        <p>Your offline-first business environment is active.</p>
+        <hr>
+        <p>Status: <span style="color: green;">● Online / Local Server Active</span></p>
+    </div>
+
+    <script>
+        // Check for updates every 5 seconds
+        async function checkForUpdates() {
+            try {
+                const response = await fetch('/api/check-update');
+                const data = await response.json();
+                
+                if (data.update_available) {
+                    document.getElementById('update-banner').style.display = 'block';
+                    // Wait 2 seconds so the user can see the message, then reload
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            } catch (error) {
+                console.log("Offline or server not ready.");
+            }
+        }
+
+        // Run check every 5 seconds
+        setInterval(checkForUpdates, 5000);
+    </script>
 </body>
 </html>

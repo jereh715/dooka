@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; overflow: hidden; }
+        header { background: #2c3e50; color: white; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* The container for the Store/Home */
+        #main-shell-container { flex: 1; border: none; width: 100%; }
+        
+        /* The container for the running module */
+        #module-container { 
+            position: absolute; top: 50px; bottom: 0; left: 0; right: 0; 
+            background: white; display: none; /* Hidden by default */
+            z-index: 500;
+        }
+        #module-frame { width: 100%; height: 100%; border: none; }
+
+        #exit-btn { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; display: none; cursor: pointer; }
+        
+        footer { height: 65px; background: white; border-top: 1px solid #ddd; display: flex; justify-content: space-around; align-items: center; }
+        .nav-btn { cursor: pointer; color: #7f8c8d; font-weight: bold; font-size: 11px; flex: 1; text-align: center; }
+        .nav-btn.active { color: #3498db; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div id="header-title">DOOKA DASHBOARD</div>
+        <button id="exit-btn" onclick="hideModule()">Minimize Module</button>
+    </header>
+
+    <iframe id="main-shell-container" src="/"></iframe>
+
+    <div id="module-container">
+        <iframe id="module-frame"></iframe>
+    </div>
+
+    <footer id="global-footer">
+        <div id="nav-home" class="nav-btn active" onclick="nav('/', 'DOOKA DASHBOARD', this)">HOME</div>
+        <div id="nav-store" class="nav-btn" onclick="nav('/store', 'APP STORE', this)">STORE</div>
+        <div id="nav-dev" class="nav-btn" onclick="nav('/upload', 'DEV PORTAL', this)">DEV</div>
+    </footer>
+
+    <script>
+        let currentActiveModule = null;
+
+        function nav(url, headText, el) {
+            document.getElementById('main-shell-container').src = url;
+            document.getElementById('header-title').innerText = headText;
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        // When user clicks "Run" in Store
+        window.addEventListener('message', function(e) {
+            if(e.data.action === 'run') {
+                const moduleUrl = '/run/' + e.data.name;
+                
+                // Only reload the iframe if it's a NEW module or first time
+                if (currentActiveModule !== e.data.name) {
+                    document.getElementById('module-frame').src = moduleUrl;
+                    currentActiveModule = e.data.name;
+                }
+
+                showModule(e.data.name);
+            }
+        });
+
+        function showModule(name) {
+            document.getElementById('module-container').style.display = 'block';
+            document.getElementById('global-footer').classList.add('hidden');
+            document.getElementById('exit-btn').style.display = 'block';
+            document.getElementById('header-title').innerText = "RUNNING: " + name.toUpperCase();
+        }
+
+        function hideModule() {
+            // We don't change the src, we just hide the div!
+            document.getElementById('module-container').style.display = 'none';
+            document.getElementById('global-footer').classList.remove('hidden');
+            document.getElementById('exit-btn').style.display = 'none';
+            
+            // Return header title to whatever the Store/Home was
+            document.getElementById('header-title').innerText = "DOOKA STORE (Module Paused)";
+        }
+    </script>
+</body>
+</html>

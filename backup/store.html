@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dooka - Store</title>
+    <style>
+        :root { 
+            --primary: #2c3e50; 
+            --accent: #3498db; 
+            --success: #27ae60; 
+            --bg: #f4f7f6; 
+            --text-main: #2c3e50;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            background: var(--bg); 
+            padding: 20px; 
+            color: var(--text-main);
+        }
+
+        h1 { font-size: 1.5rem; margin-bottom: 20px; }
+
+        .card { 
+            background: white; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+            overflow: hidden; 
+        }
+
+        .module-item { 
+            padding: 15px; 
+            border-bottom: 1px solid #eee; 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+        }
+
+        .module-item:last-child { border-bottom: none; }
+
+        .module-info { display: flex; align-items: center; font-weight: 600; }
+        .module-icon { margin-right: 12px; font-size: 1.2rem; }
+
+        .btn-group { display: flex; gap: 8px; }
+
+        .btn-small { 
+            padding: 8px 15px; 
+            border-radius: 6px; 
+            border: none; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 0.8rem;
+            transition: opacity 0.2s;
+            color: white;
+        }
+
+        .btn-install { background: var(--primary); }
+        .btn-run { background: var(--success); }
+        
+        button:active { opacity: 0.7; }
+        
+        .loading-text { padding: 20px; color: #7f8c8d; text-align: center; }
+    </style>
+</head>
+<body onload="loadRemoteModules()">
+
+    <h1>App Store</h1>
+    
+    <div class="card" id="modules-list">
+        <div class="loading-text">Connecting to GitHub cache...</div>
+    </div>
+
+    <script>
+        /**
+         * 1. Fetch available modules from the Python backend cache
+         */
+        async function loadRemoteModules() {
+            const listContainer = document.getElementById('modules-list');
+            try {
+                const response = await fetch('/api/list-remote');
+                const modules = await response.json();
+                
+                if (!modules || modules.length === 0) {
+                    listContainer.innerHTML = `<div class="loading-text">No modules found in cloud.</div>`;
+                    return;
+                }
+
+                listContainer.innerHTML = modules.map(name => `
+                    <div class="module-item">
+                        <div class="module-info">
+                            <span class="module-icon">📦</span>
+                            <span>${name}</span>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn-small btn-install" onclick="installModule('${name}')">Install</button>
+                            <button class="btn-small btn-run" onclick="runModule('${name}')">Run</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                listContainer.innerHTML = `<div class="loading-text" style="color: #e74c3c;">Failed to load modules. Check connection.</div>`;
+            }
+        }
+
+        /**
+         * 2. Install module (Copy from cache to local installed folder)
+         */
+        async function installModule(name) {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "Wait...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/install-module', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name: name })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✅ ${name} installed successfully!`);
+                } else {
+                    alert(`❌ Error: ${result.error}`);
+                }
+            } catch (e) {
+                alert("❌ Connection error during installation.");
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        /**
+         * 3. Run Module
+         * Sends a message to the Parent (shell.html) to change the iframe source
+         */
+        async function runModule(name) {
+            // We notify the parent shell to handle navigation and header update
+            window.parent.postMessage({
+                action: 'run',
+                name: name
+            }, '*');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dooka - Dev Portal</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --error: #e74c3c; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        h1, h3 { margin-top: 0; }
+        input, select, button { display: block; width: 100%; margin: 12px 0; padding: 12px; border-radius: 6px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .setup-btn { background: var(--accent); }
+        .status { text-align: center; font-size: 0.9rem; font-weight: bold; min-height: 1.2rem; }
+        .hidden { display: none; }
+        .id-badge { font-family: monospace; background: #eee; padding: 5px; font-size: 0.8rem; word-break: break-all; border-radius: 4px; }
+        label { font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-left: 2px; }
+    </style>
+</head>
+<body onload="checkIdentity()">
+    <h1>Developer Portal</h1>
+
+    <div id="setup-section" class="card">
+        <h3>🚀 Onboarding: Setup Identity</h3>
+        <p>Before publishing, you need a Developer ID. This is stored locally and used to sign your modules.</p>
+        <input type="email" id="devEmail" placeholder="Backup Email (for recovery)">
+        <input type="password" id="devPass" placeholder="Recovery Password">
+        <button class="setup-btn" onclick="setupIdentity()">Generate My Developer ID</button>
+        <div id="setup-status" class="status"></div>
+    </div>
+
+    <div id="dev-section" class="card hidden">
+        <h3>📦 Deploy Module</h3>
+        <p>Your ID: <span id="display-id" class="id-badge"></span></p>
+        
+        <label for="repoTarget">Destination Repository</label>
+        <select id="repoTarget">
+            <option value="app">App (jereh715/modules)</option>
+            <option value="plugin">Plugin (jereh715/dooka)</option>
+        </select>
+
+        <input type="text" id="moduleName" placeholder="Module Name (e.g. com.dev.pos)">
+        <input type="file" id="moduleFolder" webkitdirectory directory multiple>
+        <button id="pushBtn" onclick="publishModule()">Push to GitHub</button>
+        <div id="upload-status" class="status"></div>
+    </div>
+
+    <script>
+        const setupDiv = document.getElementById('setup-section');
+        const devDiv = document.getElementById('dev-section');
+
+        async function checkIdentity() {
+            try {
+                const response = await fetch('/api/get-my-id');
+                const result = await response.json();
+                if (result.public_key) {
+                    showDevSection(result.public_key);
+                }
+            } catch (e) {
+                console.error("Auth check failed");
+            }
+        }
+
+        async function setupIdentity() {
+            const email = document.getElementById('devEmail').value;
+            const pass = document.getElementById('devPass').value;
+            const status = document.getElementById('setup-status');
+
+            if (!email || !pass) {
+                status.style.color = 'var(--error)';
+                status.innerText = "⚠️ Email and Password required for recovery!";
+                return;
+            }
+
+            status.style.color = 'var(--accent)';
+            status.innerText = "Generating keys...";
+
+            try {
+                const response = await fetch('/api/setup-identity', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email, password: pass })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showDevSection(result.public_key);
+                }
+            } catch (e) {
+                status.innerText = "❌ Connection error.";
+            }
+        }
+
+        function showDevSection(id) {
+            setupDiv.classList.add('hidden');
+            devDiv.classList.remove('hidden');
+            document.getElementById('display-id').innerText = id;
+        }
+
+        async function publishModule() {
+            const name = document.getElementById('moduleName').value;
+            const target = document.getElementById('repoTarget').value;
+            const folderInput = document.getElementById('moduleFolder');
+            const status = document.getElementById('upload-status');
+            const btn = document.getElementById('pushBtn');
+
+            if (!name || folderInput.files.length === 0) {
+                status.style.color = 'var(--error)';
+                status.innerText = "⚠️ Fill all fields and select a folder"; 
+                return;
+            }
+
+            btn.disabled = true;
+            status.style.color = 'var(--accent)';
+            status.innerText = `🚀 Syncing with ${target === 'app' ? 'modules' : 'dooka'}...`;
+            
+            const formData = new FormData();
+            formData.append('module_name', name);
+            formData.append('target', target); // Sends 'app' or 'plugin'
+            
+            for (let file of folderInput.files) {
+                formData.append('files', file, file.webkitRelativePath || file.name);
+            }
+
+            try {
+                const response = await fetch('/api/upload-module', { method: 'POST', body: formData });
+                const result = await response.json();
+                
+                if (result.success) {
+                    status.style.color = 'var(--success)';
+                    status.innerText = "✅ Pushed successfully!";
+                } else {
+                    status.style.color = 'var(--error)';
+                    status.innerText = "❌ " + result.error;
+                }
+            } catch (e) {
+                status.style.color = 'var(--error)';
+                status.innerText = "❌ Connection error.";
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

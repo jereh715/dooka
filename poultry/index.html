@@ -3,199 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriSmart | Integrated Farm Management</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <title>Dooka - Poultry Manager</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
-        body { font-family: 'DM Sans', sans-serif; background-color: #f8fafc; }
-        .tab-active { color: #16a34a; border-bottom: 2px solid #16a34a; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        :root {
+            --primary: #2c3e50;
+            --layer-color: #f39c12;
+            --broiler-color: #27ae60;
+            --bg: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background-color: var(--bg);
+            color: #333;
+        }
+
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .container { padding: 20px; max-width: 1000px; margin: auto; }
+
+        /* Dashboard Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border-left: 5px solid #ccc;
+        }
+
+        .stat-card.layers { border-left-color: var(--layer-color); }
+        .stat-card.broilers { border-left-color: var(--broiler-color); }
+
+        .stat-card h3 { margin: 0; font-size: 0.9rem; color: #7f8c8d; }
+        .stat-card p { margin: 10px 0 0; font-size: 1.8rem; font-weight: bold; }
+
+        /* Management Sections */
+        .section-title {
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            margin-top: 15px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f2f2f2; }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-add { background: var(--primary); color: white; }
     </style>
 </head>
-<body class="flex flex-col h-screen overflow-hidden">
+<body>
 
-    <header class="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0">
-        <div class="flex items-center gap-2 text-green-600 font-bold text-xl">
-            <i data-lucide="leaf"></i>
-            <span>AgriSmart</span>
+<header>
+    <h1>Poultry Management System</h1>
+</header>
+
+<div class="container">
+    <div class="stats-grid">
+        <div class="stat-card layers">
+            <h3>Total Layers</h3>
+            <p id="total-layers">150</p>
         </div>
-        <div class="flex items-center gap-6">
-            <div class="hidden md:flex flex-col text-right">
-                <span class="text-xs text-slate-500 font-medium">Sunny • 28°C</span>
-                <span class="text-xs font-bold text-slate-800">Nairobi, Kenya</span>
-            </div>
-            <button class="p-2 bg-slate-100 rounded-full text-slate-600 relative">
-                <i data-lucide="bell" size="20"></i>
-                <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+        <div class="stat-card">
+            <h3>Daily Egg Collection</h3>
+            <p id="egg-count">124</p>
         </div>
-    </header>
-
-    <div class="flex flex-1 overflow-hidden">
-        <aside class="w-20 md:w-64 bg-white border-r flex flex-col py-6">
-            <nav class="flex-1 px-4 space-y-2">
-                <button onclick="switchView('dashboard')" class="w-full flex items-center gap-3 p-3 bg-green-50 text-green-700 rounded-xl font-bold">
-                    <i data-lucide="layout-grid" size="20"></i> <span class="hidden md:block">Dashboard</span>
-                </button>
-                <button onclick="switchView('crops')" class="w-full flex items-center gap-3 p-3 text-slate-500 hover:bg-slate-50 rounded-xl font-medium transition">
-                    <i data-lucide="sprout" size="20"></i> <span class="hidden md:block">Crops</span>
-                </button>
-                <button onclick="switchView('livestock')" class="w-full flex items-center gap-3 p-3 text-slate-500 hover:bg-slate-50 rounded-xl font-medium transition">
-                    <i data-lucide="dog" size="20"></i> <span class="hidden md:block">Livestock</span>
-                </button>
-                <button onclick="switchView('finance')" class="w-full flex items-center gap-3 p-3 text-slate-500 hover:bg-slate-50 rounded-xl font-medium transition">
-                    <i data-lucide="landmark" size="20"></i> <span class="hidden md:block">Finance</span>
-                </button>
-            </nav>
-            <div class="px-4">
-                <div class="bg-slate-900 rounded-2xl p-4 text-white hidden md:block">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Storage Status</p>
-                    <div class="mt-2 flex justify-between text-xs">
-                        <span>Silo A</span>
-                        <span>78% Full</span>
-                    </div>
-                    <div class="w-full bg-slate-700 h-1.5 rounded-full mt-1">
-                        <div class="bg-green-500 h-full rounded-full" style="width: 78%"></div>
-                    </div>
-                </div>
-            </div>
-        </aside>
-
-        <main class="flex-1 overflow-y-auto p-6 custom-scrollbar">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                    <div class="flex items-center gap-3 text-slate-500 mb-3 text-sm font-medium">
-                        <i data-lucide="droplets" size="18" class="text-blue-500"></i> Soil Moisture
-                    </div>
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-2xl font-bold text-slate-800">42%</span>
-                        <span class="text-xs text-slate-400">Optimal</span>
-                    </div>
-                </div>
-                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                    <div class="flex items-center gap-3 text-slate-500 mb-3 text-sm font-medium">
-                        <i data-lucide="thermometer" size="18" class="text-orange-500"></i> Avg. Temp
-                    </div>
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-2xl font-bold text-slate-800">26.4°C</span>
-                    </div>
-                </div>
-                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                    <div class="flex items-center gap-3 text-slate-500 mb-3 text-sm font-medium">
-                        <i data-lucide="trending-up" size="18" class="text-green-500"></i> Market Index
-                    </div>
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-2xl font-bold text-slate-800">+2.4%</span>
-                    </div>
-                </div>
-                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                    <div class="flex items-center gap-3 text-slate-500 mb-3 text-sm font-medium">
-                        <i data-lucide="wallet" size="18" class="text-purple-500"></i> Expenses
-                    </div>
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-2xl font-bold text-slate-800">KES 12k</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2 space-y-6">
-                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                        <div class="p-5 border-b flex justify-between items-center">
-                            <h2 class="font-bold text-slate-800">Active Tasks</h2>
-                            <button class="text-green-600 text-sm font-bold hover:underline">+ New Task</button>
-                        </div>
-                        <div class="divide-y divide-slate-50">
-                            <div class="p-4 flex items-center gap-4 hover:bg-slate-50 transition cursor-pointer">
-                                <input type="checkbox" class="w-5 h-5 rounded border-slate-300 text-green-600 focus:ring-green-500">
-                                <div class="flex-1">
-                                    <p class="text-sm font-bold text-slate-800">Fertilizer Application - Sector B</p>
-                                    <p class="text-xs text-slate-500">Due by 4:00 PM Today</p>
-                                </div>
-                                <span class="px-2 py-1 bg-orange-100 text-orange-600 rounded text-[10px] font-bold">HIGH PRIORITY</span>
-                            </div>
-                            <div class="p-4 flex items-center gap-4 hover:bg-slate-50 transition cursor-pointer">
-                                <input type="checkbox" class="w-5 h-5 rounded border-slate-300 text-green-600">
-                                <div class="flex-1">
-                                    <p class="text-sm font-bold text-slate-800">Vaccinate Sheep - Tag #S-20 to #S-50</p>
-                                    <p class="text-xs text-slate-500">Due Tomorrow</p>
-                                </div>
-                                <span class="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">LIVESTOCK</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600">
-                                <i data-lucide="sun" size="24"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-bold text-slate-800">Maize Plot</h4>
-                                <p class="text-xs text-slate-500">Vegg. Stage • 12 Days to Harvest</p>
-                            </div>
-                        </div>
-                        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                                <i data-lucide="droplets" size="24"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-bold text-slate-800">Onion Nursery</h4>
-                                <p class="text-xs text-slate-500">Germination • Water in 4 hrs</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="space-y-6">
-                    <div class="bg-green-600 rounded-2xl p-6 text-white shadow-lg shadow-green-100">
-                        <h2 class="font-bold mb-4 opacity-90">Today's Forecast</h2>
-                        <div class="flex items-center justify-between">
-                            <i data-lucide="cloud-rain" size="48"></i>
-                            <div class="text-right">
-                                <p class="text-4xl font-bold">24°</p>
-                                <p class="text-sm opacity-80">Light Showers</p>
-                            </div>
-                        </div>
-                        <div class="mt-6 pt-6 border-t border-green-500/50 flex justify-between text-xs font-medium">
-                            <div class="text-center"><p class="opacity-70 mb-1">Morning</p><p>22°</p></div>
-                            <div class="text-center"><p class="opacity-70 mb-1">Afternoon</p><p>28°</p></div>
-                            <div class="text-center"><p class="opacity-70 mb-1">Evening</p><p>19°</p></div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-                        <h2 class="font-bold text-slate-800 mb-4">Market Watch</h2>
-                        <div class="space-y-4">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm font-medium text-slate-600">Grade 1 Maize (90kg)</span>
-                                <span class="text-sm font-bold text-slate-800">KES 3,400</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm font-medium text-slate-600">Tomatoes (Box)</span>
-                                <span class="text-sm font-bold text-red-500">KES 4,100 ↓</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm font-medium text-slate-600">Potatoes (Bag)</span>
-                                <span class="text-sm font-bold text-green-500">KES 2,800 ↑</span>
-                            </div>
-                        </div>
-                        <button class="w-full mt-6 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition">VIEW FULL TRENDS</button>
-                    </div>
-                </div>
-            </div>
-        </main>
+        <div class="stat-card broilers">
+            <h3>Total Broilers</h3>
+            <p id="total-broilers">500</p>
+        </div>
+        <div class="stat-card">
+            <h3>Feed Stock (Kg)</h3>
+            <p id="feed-stock">45.5</p>
+        </div>
     </div>
 
-    <script>
-        lucide.createIcons();
+    <div class="section-title">
+        <h2>Layers (Egg Production)</h2>
+        <button class="btn btn-add" onclick="logData('layers')">+ Log Collection</button>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Flock ID</th>
+                <th>Eggs Collected</th>
+                <th>Damaged</th>
+                <th>Feed Consumed</th>
+            </tr>
+        </thead>
+        <tbody id="layers-table">
+            <tr>
+                <td>2026-04-13</td>
+                <td>L-Block-A</td>
+                <td>62</td>
+                <td>2</td>
+                <td>12kg</td>
+            </tr>
+        </tbody>
+    </table>
 
-        function switchView(view) {
-            // Simplified for demo - you can add navigation logic similar to your POS here
-            alert("Switching to " + view.toUpperCase() + " module.");
+    <div class="section-title">
+        <h2>Broilers (Meat Production)</h2>
+        <button class="btn btn-add" onclick="logData('broilers')">+ Log Batch</button>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Batch ID</th>
+                <th>Age (Weeks)</th>
+                <th>Avg. Weight (Kg)</th>
+                <th>Mortality</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="broilers-table">
+            <tr>
+                <td>B-202-April</td>
+                <td>4</td>
+                <td>1.8</td>
+                <td>0</td>
+                <td>Healthy</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    function logData(type) {
+        const value = prompt(`Enter ${type} data:`);
+        if (value) {
+            alert(`Logged ${value} for ${type}. (Next step: Connect to your Dooka Local API)`);
         }
-    </script>
+    }
+
+    // You can use window.parent.postMessage here if this module 
+    // needs to talk back to your Dooka shell!
+</script>
+
 </body>
 </html>

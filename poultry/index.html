@@ -3,174 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dooka - Poultry Manager</title>
+    <title>Dooka Shell</title>
     <style>
-        :root {
-            --primary: #2c3e50;
-            --layer-color: #f39c12;
-            --broiler-color: #27ae60;
-            --bg: #f8f9fa;
-        }
-
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            margin: 0;
-            background-color: var(--bg);
-            color: #333;
-        }
-
-        header {
-            background: var(--primary);
-            color: white;
-            padding: 1rem;
-            text-align: center;
-        }
-
-        .container { padding: 20px; max-width: 1000px; margin: auto; }
-
-        /* Dashboard Stats */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            border-left: 5px solid #ccc;
-        }
-
-        .stat-card.layers { border-left-color: var(--layer-color); }
-        .stat-card.broilers { border-left-color: var(--broiler-color); }
-
-        .stat-card h3 { margin: 0; font-size: 0.9rem; color: #7f8c8d; }
-        .stat-card p { margin: 10px 0 0; font-size: 1.8rem; font-weight: bold; }
-
-        /* Management Sections */
-        .section-title {
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 10px;
-            margin-top: 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            margin-top: 15px;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #f2f2f2; }
-
-        .btn {
-            padding: 8px 16px;
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .btn-add { background: var(--primary); color: white; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f0f2f5; }
+        button { padding: 15px 25px; font-size: 16px; color: white; background: #007bff; border: none; border-radius: 8px; cursor: pointer; transition: background 0.3s; }
+        button:hover { background: #0056b3; }
+        .status { margin-top: 20px; color: #555; }
     </style>
 </head>
 <body>
 
-<header>
-    <h1>Poultry Management System</h1>
-</header>
+    <h1>Dooka Module</h1>
+    <button onclick="sendNotification()">Send Notification</button>
+    <div id="status" class="status"></div>
 
-<div class="container">
-    <div class="stats-grid">
-        <div class="stat-card layers">
-            <h3>Total Layers</h3>
-            <p id="total-layers">150</p>
-        </div>
-        <div class="stat-card">
-            <h3>Daily Egg Collection</h3>
-            <p id="egg-count">124</p>
-        </div>
-        <div class="stat-card broilers">
-            <h3>Total Broilers</h3>
-            <p id="total-broilers">500</p>
-        </div>
-        <div class="stat-card">
-            <h3>Feed Stock (Kg)</h3>
-            <p id="feed-stock">45.5</p>
-        </div>
-    </div>
+    <script>
+        async function sendNotification() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = "Sending...";
 
-    <div class="section-title">
-        <h2>Layers (Egg Production)</h2>
-        <button class="btn btn-add" onclick="logData('layers')">+ Log Collection</button>
-    </div>
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Flock ID</th>
-                <th>Eggs Collected</th>
-                <th>Damaged</th>
-                <th>Feed Consumed</th>
-            </tr>
-        </thead>
-        <tbody id="layers-table">
-            <tr>
-                <td>2026-04-13</td>
-                <td>L-Block-A</td>
-                <td>62</td>
-                <td>2</td>
-                <td>12kg</td>
-            </tr>
-        </tbody>
-    </table>
+            try {
+                const response = await fetch('/api/notifications/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: "Hello from Dooka!",
+                        message: "This is a cross-platform notification."
+                    })
+                });
 
-    <div class="section-title">
-        <h2>Broilers (Meat Production)</h2>
-        <button class="btn btn-add" onclick="logData('broilers')">+ Log Batch</button>
-    </div>
-    <table>
-        <thead>
-            <tr>
-                <th>Batch ID</th>
-                <th>Age (Weeks)</th>
-                <th>Avg. Weight (Kg)</th>
-                <th>Mortality</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody id="broilers-table">
-            <tr>
-                <td>B-202-April</td>
-                <td>4</td>
-                <td>1.8</td>
-                <td>0</td>
-                <td>Healthy</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
+                const result = await response.json();
 
-<script>
-    function logData(type) {
-        const value = prompt(`Enter ${type} data:`);
-        if (value) {
-            alert(`Logged ${value} for ${type}. (Next step: Connect to your Dooka Local API)`);
+                if (response.ok && result.success) {
+                    statusDiv.innerText = "✅ Notification sent!";
+                } else {
+                    // If permissions.handle_request returns "request", 
+                    // Android will pop up the system dialog.
+                    statusDiv.innerText = "❌ Error: " + (result.error || "Permission required");
+                }
+            } catch (err) {
+                statusDiv.innerText = "❌ Network error.";
+                console.error(err);
+            }
         }
-    }
-
-    // You can use window.parent.postMessage here if this module 
-    // needs to talk back to your Dooka shell!
-</script>
-
+    </script>
 </body>
 </html>

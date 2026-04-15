@@ -3,46 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dooka Shell</title>
+    <title>Dooka Camera Test</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f0f2f5; }
-        button { padding: 15px 25px; font-size: 16px; color: white; background: #007bff; border: none; border-radius: 8px; cursor: pointer; transition: background 0.3s; }
-        button:hover { background: #0056b3; }
-        .status { margin-top: 20px; color: #555; }
+        body { font-family: sans-serif; padding: 20px; text-align: center; background: #f4f7f6; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button { 
+            padding: 12px 24px; font-size: 16px; border: none; border-radius: 6px;
+            cursor: pointer; margin: 10px; transition: 0.2s;
+        }
+        .btn-check { background: #6c757d; color: white; }
+        .btn-request { background: #28a745; color: white; }
+        #log { margin-top: 20px; padding: 10px; background: #eee; border-radius: 4px; font-family: monospace; }
     </style>
 </head>
 <body>
 
-    <h1>Dooka Module</h1>
-    <button onclick="sendNotification()">Send Notification</button>
-    <div id="status" class="status"></div>
+    <div class="card">
+        <h2>Camera Permission</h2>
+        <button class="btn-check" onclick="manageCamera('check')">Check Status</button>
+        <button class="btn-request" onclick="manageCamera('request')">Request Permission</button>
+        <div id="log">Waiting for action...</div>
+    </div>
 
     <script>
-        async function sendNotification() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerText = "Sending...";
+        async function manageCamera(action) {
+            const log = document.getElementById('log');
+            log.innerText = `Sending ${action} request...`;
 
             try {
-                const response = await fetch('/api/notifications/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: "Hello from Dooka!",
-                        message: "This is a cross-platform notification."
-                    })
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    statusDiv.innerText = "✅ Notification sent!";
-                } else {
-                    // If permissions.handle_request returns "request", 
-                    // Android will pop up the system dialog.
-                    statusDiv.innerText = "❌ Error: " + (result.error || "Permission required");
-                }
+                // Hits @server.route('/api/permissions/<name>/<action>') in app.py
+                const response = await fetch(`/api/permissions/camera/${action}`);
+                const data = await response.json();
+                
+                log.innerText = `Result: ${data.granted ? "GRANTED" : "DENIED/PENDING"}`;
+                console.log("Response:", data);
             } catch (err) {
-                statusDiv.innerText = "❌ Network error.";
+                log.innerText = "Error connecting to Flask server.";
                 console.error(err);
             }
         }

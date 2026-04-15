@@ -3,45 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dooka Camera Test</title>
+    <title>Dooka Location</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; text-align: center; background: #f4f7f6; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        button { 
-            padding: 12px 24px; font-size: 16px; border: none; border-radius: 6px;
-            cursor: pointer; margin: 10px; transition: 0.2s;
-        }
-        .btn-check { background: #6c757d; color: white; }
-        .btn-request { background: #28a745; color: white; }
-        #log { margin-top: 20px; padding: 10px; background: #eee; border-radius: 4px; font-family: monospace; }
+        body { font-family: -apple-system, sans-serif; padding: 20px; background: #f9f9f9; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; }
+        .status-pill { display: inline-block; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 15px; }
+        .granted { background: #d4edda; color: #155724; }
+        .denied { background: #f8d7da; color: #721c24; }
+        button { width: 100%; padding: 15px; background: #007aff; color: white; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; }
+        #coords { margin-top: 20px; font-family: monospace; color: #555; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>Camera Permission</h2>
-        <button class="btn-check" onclick="manageCamera('check')">Check Status</button>
-        <button class="btn-request" onclick="manageCamera('request')">Request Permission</button>
-        <div id="log">Waiting for action...</div>
+        <div id="statusPill" class="status-pill denied">Checking Permissions...</div>
+        <h1>Location Tracker</h1>
+        <p>Permissions are manually granted in settings.</p>
+        
+        <button onclick="getLocation()">Get Current Location</button>
+        
+        <div id="coords">
+            Latitude: -- <br>
+            Longitude: --
+        </div>
     </div>
 
     <script>
-        async function manageCamera(action) {
-            const log = document.getElementById('log');
-            log.innerText = `Sending ${action} request...`;
-
+        // Check permission status on load
+        async function checkStatus() {
             try {
-                // Hits @server.route('/api/permissions/<name>/<action>') in app.py
-                const response = await fetch(`/api/permissions/camera/${action}`);
-                const data = await response.json();
+                const res = await fetch('/api/permissions/location/check');
+                const data = await res.json();
+                const pill = document.getElementById('statusPill');
                 
-                log.innerText = `Result: ${data.granted ? "GRANTED" : "DENIED/PENDING"}`;
-                console.log("Response:", data);
-            } catch (err) {
-                log.innerText = "Error connecting to Flask server.";
-                console.error(err);
-            }
+                if (data.granted) {
+                    pill.innerText = "Location Granted";
+                    pill.className = "status-pill granted";
+                } else {
+                    pill.innerText = "Location Denied";
+                    pill.className = "status-pill denied";
+                }
+            } catch (e) { console.error("API Error", e); }
         }
+
+        async function getLocation() {
+            const coordDiv = document.getElementById('coords');
+            coordDiv.innerText = "Fetching coordinates...";
+
+            // Use the standard Browser API (which works inside Toga WebView 
+            // once Android permissions are manually granted)
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    coordDiv.innerHTML = `
+                        <strong>Latitude:</strong> ${pos.coords.latitude.toFixed(6)} <br>
+                        <strong>Longitude:</strong> ${pos.coords.longitude.toFixed(6)}
+                    `;
+                },
+                (err) => {
+                    coordDiv.innerText = "Error: " + err.message;
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        window.onload = checkStatus;
     </script>
 </body>
 </html>

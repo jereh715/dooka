@@ -3,95 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dooka | Business OS</title>
+    <title>Dooka | Camera Test</title>
     <style>
-        :root {
-            --primary: #2563eb;
-            --bg: #f8fafc;
-            --text: #1e293b;
+        body { 
+            font-family: sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            background: #f8fafc; 
         }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .card {
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-            text-align: center;
-            width: 80%;
-            max-width: 400px;
+        video { 
+            width: 90%; 
+            max-width: 500px; 
+            border-radius: 12px; 
+            background: #000;
+            margin-top: 20px;
         }
         button {
-            background-color: var(--primary);
+            padding: 12px 24px;
+            background: #2563eb;
             color: white;
             border: none;
-            padding: 12px 24px;
             border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s;
+            font-weight: bold;
+            margin-top: 20px;
         }
-        button:active {
-            opacity: 0.8;
-        }
-        #status {
-            margin-top: 1rem;
-            font-size: 0.9rem;
-            color: #64748b;
-        }
+        #status { margin-top: 10px; color: #64748b; }
     </style>
 </head>
 <body>
-
-    <div class="card">
-        <h2>Dooka Notifications</h2>
-        <p>Test the refined Android notification system.</p>
-        
-        <button onclick="sendTestNotification()">Push Alert</button>
-        
-        <div id="status">Ready</div>
-    </div>
+    <h2>Hardware Access</h2>
+    <video id="webcam" autoplay playsinline></video>
+    <button onclick="startCamera()">Open Camera</button>
+    <div id="status">Status: Waiting</div>
 
     <script>
-        async function sendTestNotification() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerText = "Sending...";
-
+        async function startCamera() {
+            const status = document.getElementById('status');
+            const video = document.getElementById('webcam');
+            
+            status.innerText = "Status: Requesting Permission...";
+            
             try {
-                const response = await fetch('/api/notifications/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: "Dooka Business OS",
-                        message: "This is a test notification from the app shell."
-                    })
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" }, 
+                    audio: false 
                 });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    statusDiv.innerText = "✅ Notification Sent!";
-                    statusDiv.style.color = "green";
-                } else if (response.status === 403) {
-                    // This handles the 'Permission Required' response from app.py
-                    statusDiv.innerText = "⚠️ Permission requested. Please allow and try again.";
-                    statusDiv.style.color = "orange";
-                } else {
-                    statusDiv.innerText = "❌ Error: " + (result.error || "Unknown");
-                    statusDiv.style.color = "red";
-                }
+                video.srcObject = stream;
+                status.innerText = "Status: Online ✅";
             } catch (err) {
-                statusDiv.innerText = "❌ Connection failed.";
-                statusDiv.style.color = "red";
+                console.error(err);
+                status.innerText = "Status: Error - " + err.message;
             }
         }
     </script>

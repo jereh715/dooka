@@ -3,19 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dooka - Home</title>
-    <link rel="stylesheet" href="style.css"> <style>
-        :root { --primary: #2c3e50; --bg: #f4f7f6; --text-main: #2c3e50; --text-dim: #7f8c8d; }
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); color: var(--text-main); padding: 20px; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h1 { font-size: 1.5rem; }
+    <title>Location Finder</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 80%;
+            max-width: 400px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover { background-color: #0056b3; }
+        #status { margin-top: 20px; font-size: 0.9rem; color: #666; }
+        .coords { font-weight: bold; color: #007bff; }
     </style>
 </head>
 <body>
-    <h1>Dashboard</h1>
+
     <div class="card">
-        <p>System Status: <span style="color: #27ae60; font-weight: bold;">● Online</span></p>
-        <p style="font-size: 0.9em; color: var(--text-dim);">Welcome to Dooka Core. Use the navigation to manage your modules.</p>
+        <h2>Dooka Location</h2>
+        <p>Press the button below to sync your GPS coordinates.</p>
+        <button onclick="getLocation()">Get Current Location</button>
+        <div id="status">Waiting for input...</div>
     </div>
+
+    <script>
+        const statusDisplay = document.getElementById('status');
+
+        function getLocation() {
+            if (!navigator.geolocation) {
+                statusDisplay.innerHTML = "Geolocation is not supported by your browser.";
+                return;
+            }
+
+            statusDisplay.innerHTML = "Locating...";
+
+            // This call triggers the Android 'onPermissionRequest' or 'onGeolocationPermissionsShowPrompt'
+            navigator.geolocation.getCurrentPosition(success, error, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        }
+
+        function success(position) {
+            const lat  = position.coords.latitude;
+            const long = position.coords.longitude;
+
+            statusDisplay.innerHTML = `
+                <p>Success!</p>
+                <div class="coords">Lat: ${lat.toFixed(5)}</div>
+                <div class="coords">Long: ${long.toFixed(5)}</div>
+            `;
+            
+            console.log(`GPS: ${lat}, ${long}`);
+        }
+
+        function error() {
+            statusDisplay.innerHTML = "Unable to retrieve your location. Check your GPS settings.";
+        }
+    </script>
 </body>
 </html>

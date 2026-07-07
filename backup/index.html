@@ -9,6 +9,7 @@
             --bg-color: #11121a;
             --card-color: #171923;
             --accent-color: #3886ff;
+            --success-color: #00e676;
             --text-color: #e1e4ed;
             --muted-color: #697386;
         }
@@ -18,7 +19,7 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -29,10 +30,46 @@
             max-width: 450px;
             background: var(--card-color);
             border-radius: 12px;
-            padding: 24px;
+            padding: 20px;
             box-sizing: border-box;
             box-shadow: 0 8px 24px rgba(0,0,0,0.3);
             border: 1px solid #232838;
+        }
+
+        .system-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #232838;
+            padding-bottom: 15px;
+        }
+
+        .btn {
+            flex: 1;
+            background: #2c3143;
+            color: #a2aab8;
+            border: 1px solid #3d445c;
+            padding: 10px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            border-color: var(--accent-color);
+            color: #fff;
+        }
+
+        .btn-accent {
+            background: rgba(56, 134, 255, 0.1);
+            color: var(--accent-color);
+            border-color: rgba(56, 134, 255, 0.3);
         }
 
         .now-playing {
@@ -41,7 +78,7 @@
         }
 
         .track-title {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
             margin: 10px 0 5px 0;
             white-space: nowrap;
@@ -50,7 +87,7 @@
         }
 
         .track-artist {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--muted-color);
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -63,10 +100,10 @@
         }
 
         .playlist-header {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--muted-color);
             font-weight: 600;
-            margin: 25px 0 10px 0;
+            margin: 20px 0 10px 0;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             display: flex;
@@ -84,7 +121,7 @@
         }
 
         .track-list {
-            max-height: 200px;
+            max-height: 180px;
             overflow-y: auto;
             border-top: 1px solid #232838;
         }
@@ -92,29 +129,29 @@
         .track-item {
             display: flex;
             align-items: center;
-            padding: 12px 8px;
+            padding: 12px 6px;
             border-bottom: 1px solid #232838;
             cursor: pointer;
             transition: background 0.2s ease;
         }
 
         .track-item:hover {
-            background: rgba(56, 134, 255, 0.1);
+            background: rgba(56, 134, 255, 0.05);
         }
 
         .track-item.active {
-            color: var(--accent-color);
+            color: var(--success-color);
             font-weight: bold;
         }
 
         .track-icon {
-            margin-right: 12px;
-            font-size: 16px;
+            margin-right: 10px;
+            font-size: 14px;
         }
 
         .track-info {
             flex: 1;
-            font-size: 13px;
+            font-size: 12px;
             font-family: monospace;
             white-space: nowrap;
             overflow: hidden;
@@ -122,46 +159,45 @@
         }
 
         .track-size {
-            font-size: 11px;
+            font-size: 10px;
             color: var(--muted-color);
             margin-left: 10px;
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 4px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #232838;
-            border-radius: 4px;
-        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #232838; border-radius: 4px; }
     </style>
 </head>
 <body>
 
     <div class="player-container">
+        <div class="system-controls">
+            <button class="btn" onclick="requestStoragePermissions()">
+                🔑 Fix Permissions
+            </button>
+            <button class="btn btn-accent" onclick="triggerFilePicker()">
+                📂 Import Music File
+            </button>
+        </div>
+
         <div class="now-playing">
-            <div style="font-size: 48px; margin-bottom: 10px;">🎵</div>
+            <div style="font-size: 40px; margin-bottom: 5px;">🎵</div>
             <div id="current-title" class="track-title">No Track Selected</div>
-            <div class="track-artist">Local Storage Audio</div>
+            <div class="track-artist">Operat Hardware Core</div>
             
             <audio id="audio-element" controls>
                 <source id="audio-source" src="" type="audio/mpeg">
-                Your browser does not support the audio element.
             </audio>
         </div>
 
         <div class="playlist-header">
-            <span>Available Audio Catalog</span>
-            <button class="refresh-btn" onclick="fetchAudioCatalog()">🔄 Refresh</button>
+            <span>Track Roster</span>
+            <button class="refresh-btn" onclick="fetchAudioCatalog()">🔄 Scan Storage</button>
         </div>
         
         <div id="track-list" class="track-list">
-            <div style="padding: 20px; text-align: center; color: var(--muted-color); font-size: 13px;">
-                Scanning directory...
+            <div style="padding: 20px; text-align: center; color: var(--muted-color); font-size: 12px;">
+                Awaiting storage validation...
             </div>
         </div>
     </div>
@@ -170,34 +206,52 @@
         const audio = document.getElementById('audio-element');
         const source = document.getElementById('audio-source');
         const currentTitle = document.getElementById('current-title');
-        let audioFiles = [];
-
-        // Filters for audio extensions your WebView browser context can execute natively
         const audioExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
 
+        // 1. Fire Request to trigger Android Scoped Manifest Permissions Dialog
+        function requestStoragePermissions() {
+            fetch('/api/storage/request')
+                .then(r => r.json())
+                .then(data => {
+                    console.log("Permissions requested via native intent chain.");
+                    fetchAudioCatalog(); // Refresh list right after
+                })
+                .catch(e => console.error("Permission endpoint error:", e));
+        }
+
+        // 2. Fire Request to launch Native System File Picker Intent
+        function triggerFilePicker() {
+            fetch('/api/storage/picker')
+                .then(r => r.json())
+                .then(data => {
+                    console.log("Native document selection matrix active.");
+                    // Give the user a moment to pick, then scan storage automatically after 4 seconds
+                    setTimeout(fetchAudioCatalog, 4000);
+                })
+                .catch(e => console.error("Picker endpoint error:", e));
+        }
+
+        // 3. Scan system storage for audio file payloads
         function fetchAudioCatalog() {
-            // Reaches out of the iframe sandbox to talk directly to your main local microserver layer
             fetch('/api/storage/list')
                 .then(response => response.json())
                 .then(data => {
                     const listContainer = document.getElementById('track-list');
                     listContainer.innerHTML = '';
 
-                    // Filter the standard filesystem catalog for audio formats only
-                    audioFiles = data.files.filter(file => {
+                    const audioFiles = data.files.filter(file => {
                         const ext = file.name.split('.').pop().toLowerCase();
                         return audioExtensions.includes(ext);
                     });
 
                     if (audioFiles.length === 0) {
                         listContainer.innerHTML = `
-                            <div style="padding: 20px; text-align: center; color: var(--muted-color); font-size: 13px;">
-                                📁 No compatible audio tracks found in your internal sandbox space.
+                            <div style="padding: 20px; text-align: center; color: var(--muted-color); font-size: 12px;">
+                                No audio targets. Use 'Import Music File' above.
                             </div>`;
                         return;
                     }
 
-                    // Build interactive playlist grid elements
                     audioFiles.forEach((file, index) => {
                         const item = document.createElement('div');
                         item.className = 'track-item';
@@ -213,31 +267,25 @@
                     });
                 })
                 .catch(err => {
-                    console.error("Ecosystem API connection lost:", err);
                     document.getElementById('track-list').innerHTML = `
-                        <div style="padding: 20px; text-align: center; color: #ea4335; font-size: 12px;">
-                            ⚠️ Failed to tie into native storage APIs.
+                        <div style="padding: 15px; text-align: center; color: #ea4335; font-size: 11px;">
+                            ⚠️ Endpoint Offline (Verify localhost bind)
                         </div>`;
                 });
         }
 
         function loadAndPlayTrack(filename, index) {
-            // Update active styling indicators across the playlist layout
             document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
             document.getElementById(`track-${index}`).classList.add('active');
 
-            // Set current title view metadata
             currentTitle.innerText = filename;
-
-            // Route the player directly to your unrestricted raw conditional delivery pipeline!
             source.src = `/api/storage/raw/${encodeURIComponent(filename)}`;
             
-            // Re-arm underlying player codecs and stream chunk vectors immediately
             audio.load();
-            audio.play().catch(e => console.warn("Playback initialization skipped or blocked by client permissions:", e));
+            audio.play().catch(e => console.warn("Stream blocked by document lifecycle restriction"));
         }
 
-        // Boot-time auto scan
+        // Auto-run scanner on mount
         window.onload = fetchAudioCatalog;
     </script>
 </body>

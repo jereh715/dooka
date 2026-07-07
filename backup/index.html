@@ -3,87 +3,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Location Finder</title>
+    <title>Operat Music Player</title>
     <style>
+        :root {
+            --bg-color: #11121a;
+            --card-color: #171923;
+            --accent-color: #3886ff;
+            --text-color: #e1e4ed;
+            --muted-color: #697386;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f4f9;
-            color: #333;
         }
-        .card {
-            background: white;
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+
+        .player-container {
+            width: 100%;
+            max-width: 450px;
+            background: var(--card-color);
+            border-radius: 12px;
+            padding: 24px;
+            box-sizing: border-box;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            border: 1px solid #232838;
+        }
+
+        .now-playing {
             text-align: center;
-            width: 80%;
-            max-width: 400px;
+            margin-bottom: 20px;
         }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 12px 24px;
+
+        .track-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 10px 0 5px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-artist {
+            font-size: 13px;
+            color: var(--muted-color);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 10px;
             border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background 0.3s;
         }
-        button:hover { background-color: #0056b3; }
-        #status { margin-top: 20px; font-size: 0.9rem; color: #666; }
-        .coords { font-weight: bold; color: #007bff; }
+
+        .playlist-header {
+            font-size: 14px;
+            color: var(--muted-color);
+            font-weight: 600;
+            margin: 25px 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--accent-color);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .track-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border-top: 1px solid #232838;
+        }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 8px;
+            border-bottom: 1px solid #232838;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .track-item:hover {
+            background: rgba(56, 134, 255, 0.1);
+        }
+
+        .track-item.active {
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        .track-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+
+        .track-info {
+            flex: 1;
+            font-size: 13px;
+            font-family: monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-size {
+            font-size: 11px;
+            color: var(--muted-color);
+            margin-left: 10px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #232838;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>Dooka Location</h2>
-        <p>Press the button below to sync your GPS coordinates.</p>
-        <button onclick="getLocation()">Get Current Location</button>
-        <div id="status">Waiting for input...</div>
+    <div class="player-container">
+        <div class="now-playing">
+            <div style="font-size: 48px; margin-bottom: 10px;">🎵</div>
+            <div id="current-title" class="track-title">No Track Selected</div>
+            <div class="track-artist">Local Storage Audio</div>
+            
+            <audio id="audio-element" controls>
+                <source id="audio-source" src="" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
+        </div>
+
+        <div class="playlist-header">
+            <span>Available Audio Catalog</span>
+            <button class="refresh-btn" onclick="fetchAudioCatalog()">🔄 Refresh</button>
+        </div>
+        
+        <div id="track-list" class="track-list">
+            <div style="padding: 20px; text-align: center; color: var(--muted-color); font-size: 13px;">
+                Scanning directory...
+            </div>
+        </div>
     </div>
 
     <script>
-        const statusDisplay = document.getElementById('status');
+        const audio = document.getElementById('audio-element');
+        const source = document.getElementById('audio-source');
+        const currentTitle = document.getElementById('current-title');
+        let audioFiles = [];
 
-        function getLocation() {
-            if (!navigator.geolocation) {
-                statusDisplay.innerHTML = "Geolocation is not supported by your browser.";
-                return;
-            }
+        // Filters for audio extensions your WebView browser context can execute natively
+        const audioExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
 
-            statusDisplay.innerHTML = "Locating...";
+        function fetchAudioCatalog() {
+            // Reaches out of the iframe sandbox to talk directly to your main local microserver layer
+            fetch('/api/storage/list')
+                .then(response => response.json())
+                .then(data => {
+                    const listContainer = document.getElementById('track-list');
+                    listContainer.innerHTML = '';
 
-            // This call triggers the Android 'onPermissionRequest' or 'onGeolocationPermissionsShowPrompt'
-            navigator.geolocation.getCurrentPosition(success, error, {
-                enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0
-            });
+                    // Filter the standard filesystem catalog for audio formats only
+                    audioFiles = data.files.filter(file => {
+                        const ext = file.name.split('.').pop().toLowerCase();
+                        return audioExtensions.includes(ext);
+                    });
+
+                    if (audioFiles.length === 0) {
+                        listContainer.innerHTML = `
+                            <div style="padding: 20px; text-align: center; color: var(--muted-color); font-size: 13px;">
+                                📁 No compatible audio tracks found in your internal sandbox space.
+                            </div>`;
+                        return;
+                    }
+
+                    // Build interactive playlist grid elements
+                    audioFiles.forEach((file, index) => {
+                        const item = document.createElement('div');
+                        item.className = 'track-item';
+                        item.id = `track-${index}`;
+                        item.onclick = () => loadAndPlayTrack(file.name, index);
+
+                        item.innerHTML = `
+                            <span class="track-icon">▶️</span>
+                            <span class="track-info">${file.name}</span>
+                            <span class="track-size">${file.size}</span>
+                        `;
+                        listContainer.appendChild(item);
+                    });
+                })
+                .catch(err => {
+                    console.error("Ecosystem API connection lost:", err);
+                    document.getElementById('track-list').innerHTML = `
+                        <div style="padding: 20px; text-align: center; color: #ea4335; font-size: 12px;">
+                            ⚠️ Failed to tie into native storage APIs.
+                        </div>`;
+                });
         }
 
-        function success(position) {
-            const lat  = position.coords.latitude;
-            const long = position.coords.longitude;
+        function loadAndPlayTrack(filename, index) {
+            // Update active styling indicators across the playlist layout
+            document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`track-${index}`).classList.add('active');
 
-            statusDisplay.innerHTML = `
-                <p>Success!</p>
-                <div class="coords">Lat: ${lat.toFixed(5)}</div>
-                <div class="coords">Long: ${long.toFixed(5)}</div>
-            `;
+            // Set current title view metadata
+            currentTitle.innerText = filename;
+
+            // Route the player directly to your unrestricted raw conditional delivery pipeline!
+            source.src = `/api/storage/raw/${encodeURIComponent(filename)}`;
             
-            console.log(`GPS: ${lat}, ${long}`);
+            // Re-arm underlying player codecs and stream chunk vectors immediately
+            audio.load();
+            audio.play().catch(e => console.warn("Playback initialization skipped or blocked by client permissions:", e));
         }
 
-        function error() {
-            statusDisplay.innerHTML = "Unable to retrieve your location. Check your GPS settings.";
-        }
+        // Boot-time auto scan
+        window.onload = fetchAudioCatalog;
     </script>
 </body>
 </html>

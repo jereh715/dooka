@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -30,7 +31,16 @@
         function triggerNativeFileSelect() {
             fetch('/api/hardware/storage_picker')
                 .then(r => r.json())
-                .then(() => setTimeout(reloadTracks, 5000)); // Delay allows user configuration choice
+                .then(d => {
+                    // Instantly poll every second for 6 seconds to catch the file metadata 
+                    // as soon as the user selects it from the Android Document Picker
+                    let attempts = 0;
+                    let pollInterval = setInterval(() => {
+                        reloadTracks();
+                        attempts++;
+                        if (attempts > 6) clearInterval(pollInterval);
+                    }, 1000);
+                });
         }
 
         // 2. Fetch tracking details out of your standard file list API endpoint
@@ -43,7 +53,9 @@
                         html = '<div style="padding:10px; color:#697386; font-size:12px;">No music tracks found.</div>';
                     } else {
                         data.files.forEach(f => {
-                            html += `<div class="file-item" onclick="streamTargetTrack('${f.name}')">🎵 ${f.name} (${f.size})</div>`;
+                            // Safely escape single quotes in filenames to avoid JavaScript syntax breaks
+                            let safeName = f.name.replace(/'/g, "\\'");
+                            html += `<div class="file-item" onclick="streamTargetTrack('${safeName}')">🎵 ${f.name} (${f.size})</div>`;
                         });
                     }
                     document.getElementById('track-container').innerHTML = html;
@@ -54,10 +66,15 @@
         function streamTargetTrack(filename) {
             document.getElementById('now-playing').innerText = "Playing: " + filename;
             const player = document.getElementById('playback-engine');
+            
+            // Clear old track contexts completely before loading new memory buffer source
+            player.pause();
             player.src = `/api/storage/raw/${encodeURIComponent(filename)}`;
-            player.play();
+            player.load();
+            player.play().catch(e => console.log("Playback engine failed to stream: ", e));
         }
 
+        // Run internal scan on immediate deployment mount cycle
         reloadTracks();
     </script>
 </body>

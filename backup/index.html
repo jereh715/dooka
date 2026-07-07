@@ -3,290 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Operat Music Player</title>
+    <title>Operat Native Bridge Controller</title>
     <style>
-        :root {
-            --bg-color: #11121a;
-            --card-color: #171923;
-            --accent-color: #3886ff;
-            --success-color: #00e676;
-            --text-color: #e1e4ed;
-            --muted-color: #697386;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .player-container {
-            width: 100%;
-            max-width: 450px;
-            background: var(--card-color);
-            border-radius: 12px;
-            padding: 20px;
-            box-sizing: border-box;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-            border: 1px solid #232838;
-        }
-
-        .system-controls {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #232838;
-            padding-bottom: 15px;
-        }
-
-        .btn {
-            flex: 1;
-            background: #2c3143;
-            color: #a2aab8;
-            border: 1px solid #3d445c;
-            padding: 10px 8px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            transition: all 0.2s ease;
-        }
-
-        .btn:hover {
-            border-color: var(--accent-color);
-            color: #fff;
-        }
-
-        .btn-accent {
-            background: rgba(56, 134, 255, 0.1);
-            color: var(--accent-color);
-            border-color: rgba(56, 134, 255, 0.3);
-        }
-
-        .now-playing {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .track-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin: 10px 0 5px 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .track-artist {
-            font-size: 12px;
-            color: var(--muted-color);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        audio {
-            width: 100%;
-            margin-top: 10px;
-            border-radius: 8px;
-        }
-
-        .playlist-header {
-            font-size: 13px;
-            color: var(--muted-color);
-            font-weight: 600;
-            margin: 20px 0 10px 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .refresh-btn {
-            background: none;
-            border: none;
-            color: var(--accent-color);
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .track-list {
-            max-height: 180px;
-            overflow-y: auto;
-            border-top: 1px solid #232838;
-        }
-
-        .track-item {
-            display: flex;
-            align-items: center;
-            padding: 12px 6px;
-            border-bottom: 1px solid #232838;
-            cursor: pointer;
-            transition: background 0.2s ease;
-        }
-
-        .track-item:hover {
-            background: rgba(56, 134, 255, 0.05);
-        }
-
-        .track-item.active {
-            color: var(--success-color);
-            font-weight: bold;
-        }
-
-        .track-icon {
-            margin-right: 10px;
-            font-size: 14px;
-        }
-
-        .track-info {
-            flex: 1;
-            font-size: 12px;
-            font-family: monospace;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .track-size {
-            font-size: 10px;
-            color: var(--muted-color);
-            margin-left: 10px;
-        }
-
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #232838; border-radius: 4px; }
+        body { font-family: sans-serif; background: #12141c; color: #e1e4ed; padding: 20px; text-align: center; }
+        .card { background: #1a1d29; border: 1px solid #232838; padding: 24px; border-radius: 12px; max-width: 400px; margin: 40px auto; }
+        h2 { margin-top: 0; color: #fff; font-weight: 400; }
+        .btn { background: #3886ff; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
+        .status-box { background: #131622; padding: 12px; border-radius: 6px; margin: 15px 0; font-family: monospace; font-size: 12px; text-align: left; border-left: 4px solid #3886ff; }
     </style>
 </head>
 <body>
 
-    <div class="player-container">
-        <div class="system-controls">
-            <button class="btn" onclick="requestStoragePermissions()">
-                🔑 Fix Permissions
-            </button>
-            <button class="btn btn-accent" onclick="triggerFilePicker()">
-                📂 Import Music File
-            </button>
-        </div>
+<div class="card">
+    <h2>Toga Native Bridge</h2>
+    
+    <div id="status-display" class="status-box">Status: Syncing with handler.py...</div>
+    
+    <button class="btn" onclick="triggerNativeLocation()">🛰️ Fetch GPS via Python</button>
+    <button class="btn" onclick="triggerNativeNotification()">🔔 Send Android Notification</button>
+</div>
 
-        <div class="now-playing">
-            <div style="font-size: 40px; margin-bottom: 5px;">🎵</div>
-            <div id="current-title" class="track-title">No Track Selected</div>
-            <div class="track-artist">Operat Hardware Core</div>
-            
-            <audio id="audio-element" controls>
-                <source id="audio-source" src="" type="audio/mpeg">
-            </audio>
-        </div>
+<script>
+    const statusDisplay = document.getElementById('status-display');
 
-        <div class="playlist-header">
-            <span>Track Roster</span>
-            <button class="refresh-btn" onclick="fetchAudioCatalog()">🔄 Scan Storage</button>
-        </div>
-        
-        <div id="track-list" class="track-list">
-            <div style="padding: 20px; text-align: center; color: var(--muted-color); font-size: 12px;">
-                Awaiting storage validation...
-            </div>
-        </div>
-    </div>
+    // 1. Periodically poll your existing status API from handler.py to show what Python is doing
+    function checkBackendStatus() {
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(data => {
+                statusDisplay.innerText = data.status;
+            })
+            .catch(() => {
+                statusDisplay.innerText = "Status: Bridge connection offline";
+            });
+    }
+    setInterval(checkBackendStatus, 1500);
 
-    <script>
-        const audio = document.getElementById('audio-element');
-        const source = document.getElementById('audio-source');
-        const currentTitle = document.getElementById('current-title');
-        const audioExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
+    // 2. Route the Location request directly to your Python API endpoint
+    function triggerNativeLocation() {
+        statusDisplay.innerText = "Status: Sending Location intent to Python...";
+        fetch('/api/hardware/location', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if(!data.success) alert("Error: " + data.message);
+            });
+    }
 
-        // 1. Fire Request to trigger Android Scoped Manifest Permissions Dialog
-        function requestStoragePermissions() {
-            fetch('/api/storage/request')
-                .then(r => r.json())
-                .then(data => {
-                    console.log("Permissions requested via native intent chain.");
-                    fetchAudioCatalog(); // Refresh list right after
-                })
-                .catch(e => console.error("Permission endpoint error:", e));
-        }
+    // 3. Route the Notification request directly to your Python API endpoint
+    function triggerNativeNotification() {
+        statusDisplay.innerText = "Status: Requesting OS Notification via Python...";
+        fetch('/api/hardware/notify', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                title: "Operat OS Alert", 
+                message: "Location pipeline successfully processed natively." 
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if(!data.success) alert("Error: " + data.message);
+        });
+    }
+</script>
 
-        // 2. Fire Request to launch Native System File Picker Intent
-        function triggerFilePicker() {
-            fetch('/api/storage/picker')
-                .then(r => r.json())
-                .then(data => {
-                    console.log("Native document selection matrix active.");
-                    // Give the user a moment to pick, then scan storage automatically after 4 seconds
-                    setTimeout(fetchAudioCatalog, 4000);
-                })
-                .catch(e => console.error("Picker endpoint error:", e));
-        }
-
-        // 3. Scan system storage for audio file payloads
-        function fetchAudioCatalog() {
-            fetch('/api/storage/list')
-                .then(response => response.json())
-                .then(data => {
-                    const listContainer = document.getElementById('track-list');
-                    listContainer.innerHTML = '';
-
-                    const audioFiles = data.files.filter(file => {
-                        const ext = file.name.split('.').pop().toLowerCase();
-                        return audioExtensions.includes(ext);
-                    });
-
-                    if (audioFiles.length === 0) {
-                        listContainer.innerHTML = `
-                            <div style="padding: 20px; text-align: center; color: var(--muted-color); font-size: 12px;">
-                                No audio targets. Use 'Import Music File' above.
-                            </div>`;
-                        return;
-                    }
-
-                    audioFiles.forEach((file, index) => {
-                        const item = document.createElement('div');
-                        item.className = 'track-item';
-                        item.id = `track-${index}`;
-                        item.onclick = () => loadAndPlayTrack(file.name, index);
-
-                        item.innerHTML = `
-                            <span class="track-icon">▶️</span>
-                            <span class="track-info">${file.name}</span>
-                            <span class="track-size">${file.size}</span>
-                        `;
-                        listContainer.appendChild(item);
-                    });
-                })
-                .catch(err => {
-                    document.getElementById('track-list').innerHTML = `
-                        <div style="padding: 15px; text-align: center; color: #ea4335; font-size: 11px;">
-                            ⚠️ Endpoint Offline (Verify localhost bind)
-                        </div>`;
-                });
-        }
-
-        function loadAndPlayTrack(filename, index) {
-            document.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
-            document.getElementById(`track-${index}`).classList.add('active');
-
-            currentTitle.innerText = filename;
-            source.src = `/api/storage/raw/${encodeURIComponent(filename)}`;
-            
-            audio.load();
-            audio.play().catch(e => console.warn("Stream blocked by document lifecycle restriction"));
-        }
-
-        // Auto-run scanner on mount
-        window.onload = fetchAudioCatalog;
-    </script>
 </body>
 </html>

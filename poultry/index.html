@@ -3,135 +3,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Location Notifier Mini-App</title>
+    <title>Audio-Focused YouTube Player</title>
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background: #0f111a; 
-            color: #e1e4ed; 
-            margin: 0; 
-            padding: 20px; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            min-height: 80vh;
+        :root {
+            --bg-color: #121212;
+            --container-bg: #1e1e1e;
+            --accent-color: #ff0000;
+            --text-color: #ffffff;
+            --text-muted: #aaaaaa;
         }
-        .app-card { 
-            background: #161925; 
-            padding: 30px; 
-            border-radius: 12px; 
-            border: 1px solid #232838; 
-            max-width: 380px; 
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .player-container {
+            background-color: var(--container-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
             width: 100%;
+            max-width: 500px;
             text-align: center;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
         }
-        h3 { 
-            margin-top: 0; 
-            color: #fff; 
-            font-size: 20px;
-            font-weight: 500;
+
+        h2 {
+            margin-top: 0;
+            font-weight: 600;
         }
-        p {
-            color: #8a94a6;
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background-color: #2a2a2a;
+            color: white;
             font-size: 14px;
-            line-height: 1.5;
-            margin-bottom: 24px;
         }
-        .btn { 
-            background: #3886ff; 
-            color: white; 
-            border: none; 
-            padding: 14px 24px; 
-            border-radius: 8px; 
-            font-size: 14px; 
-            font-weight: bold; 
-            cursor: pointer; 
-            width: 100%;
+
+        input[type="text"]:focus {
+            outline: 2px solid var(--accent-color);
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
             transition: background 0.2s;
         }
-        .btn:active {
-            background: #2266dd;
+
+        button:hover {
+            background-color: #cc0000;
         }
-        .btn:disabled {
-            background: #2c3143;
-            color: #697386;
-            cursor: not-allowed;
+
+        /* The "Trick": We keep the video tiny but visible to satisfy YT policies */
+        .video-wrapper {
+            width: 200px;
+            height: 112px;
+            margin: 0 auto 20px auto;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
-        .console-log { 
-            margin-top: 20px; 
-            background: #12141c; 
-            padding: 12px; 
-            border-radius: 6px; 
-            font-family: monospace; 
-            font-size: 12px; 
-            text-align: left; 
-            border-left: 3px solid #3886ff;
-            word-break: break-all;
-            min-height: 40px;
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
         }
-        .success { border-left-color: #00e676; color: #00e676; }
-        .error { border-left-color: #ff5252; color: #ff5252; }
+
+        .control-btn {
+            background-color: #333;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .control-btn:hover {
+            background-color: #444;
+        }
+
+        .track-info {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            min-height: 20px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
     </style>
 </head>
 <body>
 
-    <div class="app-card">
-        <h3>📍 Location Interceptor</h3>
-        <p>Queries native hardware GPS coordinates via Python, then broadcasts an OS-level notification banner.</p>
+    <div class="player-container">
+        <h2>YT Audio Dashboard</h2>
         
-        <button id="action-btn" class="btn" onclick="fetchAndNotifyLocation()">Locate & Notify Device</button>
-        
-        <div id="console-output" class="console-log">Awaiting command pipeline...</div>
+        <div class="search-box">
+            <input type="text" id="urlInput" placeholder="Paste YouTube Link or Video ID...">
+            <button id="loadBtn">Load</button>
+        </div>
+
+        <div class="track-info" id="trackTitle">No track loaded</div>
+
+        <div class="video-wrapper">
+            <div id="youtube-player"></div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" id="playBtn">Play</button>
+            <button class="control-btn" id="pauseBtn">Pause</button>
+        </div>
     </div>
 
     <script>
-        const consoleOutput = document.getElementById('console-output');
-        const actionBtn = document.getElementById('action-btn');
+        // Load the IFrame Player API code asynchronously.
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-        function updateConsole(text, type = '') {
-            consoleOutput.innerText = text;
-            consoleOutput.className = 'console-log ' + type;
+        let player;
+
+        // This function creates an <iframe> (and YouTube player) after the API code downloads.
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('youtube-player', {
+                width: '200',
+                height: '112',
+                videoId: 'dQw4w9WgXcQ', // Default fallback video (Rick Roll)
+                playerVars: {
+                    'playsinline': 1,
+                    'controls': 0, // Hide YouTube's native controls
+                    'disablekb': 1
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
         }
 
-        function fetchAndNotifyLocation() {
-            // Lock UI during execution
-            actionBtn.disabled = true;
-            updateConsole("🛰️ Requesting hardware GPS coordinates from Python...");
-
-            // Step 1: Query the updated location endpoint
-            fetch('/api/hardware/location')
-                .then(response => response.json())
-                .then(locationData => {
-                    if (locationData.error) {
-                        throw new Error(locationData.error);
-                    }
-
-                    // Extract text info (Works natively or with your mock fallback string format)
-                    const locationText = locationData.message || `Coordinates discovered successfully.`;
-                    updateConsole(`✅ Location found!\n${locationText}\n\n🔔 Handing off context to Android Notifications...`, 'success');
-
-                    // Step 2: Push location data string to notification endpoint
-                    const encodedTitle = encodeURIComponent("📍 Device Located Natively");
-                    const encodedMsg = encodeURIComponent(locationText);
-
-                    return fetch(`/api/hardware/notification?title=${encodedTitle}&msg=${encodedMsg}`);
-                })
-                .then(response => response.json())
-                .then(notificationData => {
-                    if (notificationData.error) {
-                        throw new Error(notificationData.error);
-                    }
-                    // Complete execution successfully
-                    updateConsole("🔔 Notification dispatched successfully straight to the Android notification drawer!", "success");
-                    actionBtn.disabled = false;
-                })
-                .catch(err => {
-                    // Handle failures smoothly
-                    updateConsole(`❌ Pipeline failed: ${err.message}`, "error");
-                    actionBtn.disabled = false;
-                });
+        function onPlayerReady(event) {
+            document.getElementById('trackTitle').innerText = "Player Ready. Load a link!";
         }
+
+        function onPlayerStateChange(event) {
+            // Update title if a new video starts playing
+            if (event.data == YT.PlayerState.PLAYING) {
+                const videoData = player.getVideoData();
+                document.getElementById('trackTitle').innerText = videoData.title || "Playing...";
+            }
+        }
+
+        // Helper function to extract Video ID from various YouTube URL formats
+        function extractVideoId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : url;
+        }
+
+        // Event Listeners for Custom Controls
+        document.getElementById('loadBtn').addEventListener('click', () => {
+            const input = document.getElementById('urlInput').value.trim();
+            if (input) {
+                const videoId = extractVideoId(input);
+                player.loadVideoById(videoId);
+            }
+        });
+
+        document.getElementById('playBtn').addEventListener('click', () => {
+            if (player && player.playVideo) player.playVideo();
+        });
+
+        document.getElementById('pauseBtn').addEventListener('click', () => {
+            if (player && player.pauseVideo) player.pauseVideo();
+        });
     </script>
 </body>
 </html>

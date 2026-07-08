@@ -32,6 +32,7 @@
             width: 100%;
             max-width: 500px;
             text-align: center;
+            box-sizing: border-box;
         }
 
         h2 {
@@ -53,6 +54,7 @@
             background-color: #2a2a2a;
             color: white;
             font-size: 14px;
+            width: 100%;
         }
 
         input[type="text"]:focus {
@@ -74,7 +76,6 @@
             background-color: #cc0000;
         }
 
-        /* The "Trick": We keep the video tiny but visible to satisfy YT policies */
         .video-wrapper {
             width: 200px;
             height: 112px;
@@ -120,11 +121,11 @@
         <h2>YT Audio Dashboard</h2>
         
         <div class="search-box">
-            <input type="text" id="urlInput" placeholder="Paste YouTube Link or Video ID...">
+            <input type="text" id="urlInput" placeholder="Enter song title or paste YT link...">
             <button id="loadBtn">Load</button>
         </div>
 
-        <div class="track-info" id="trackTitle">No track loaded</div>
+        <div class="track-info" id="trackTitle">Ready to search</div>
 
         <div class="video-wrapper">
             <div id="youtube-player"></div>
@@ -137,7 +138,6 @@
     </div>
 
     <script>
-        // Load the IFrame Player API code asynchronously.
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         const firstScriptTag = document.getElementsByTagName('script')[0];
@@ -145,16 +145,15 @@
 
         let player;
 
-        // This function creates an <iframe> (and YouTube player) after the API code downloads.
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
                 width: '200',
                 height: '112',
-                videoId: 'dQw4w9WgXcQ', // Default fallback video (Rick Roll)
                 playerVars: {
                     'playsinline': 1,
-                    'controls': 0, // Hide YouTube's native controls
-                    'disablekb': 1
+                    'controls': 0, 
+                    'disablekb': 1,
+                    'origin': window.location.origin
                 },
                 events: {
                     'onReady': onPlayerReady,
@@ -164,30 +163,45 @@
         }
 
         function onPlayerReady(event) {
-            document.getElementById('trackTitle').innerText = "Player Ready. Load a link!";
+            document.getElementById('trackTitle').innerText = "Enter a search term above!";
         }
 
         function onPlayerStateChange(event) {
-            // Update title if a new video starts playing
             if (event.data == YT.PlayerState.PLAYING) {
                 const videoData = player.getVideoData();
-                document.getElementById('trackTitle').innerText = videoData.title || "Playing...";
+                document.getElementById('trackTitle').innerText = videoData.title || "Playing Audio...";
             }
         }
 
-        // Helper function to extract Video ID from various YouTube URL formats
+        // Checks if input is a URL or plain text search
+        function isUrl(str) {
+            return str.includes('youtube.com') || str.includes('youtu.be');
+        }
+
         function extractVideoId(url) {
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
             const match = url.match(regExp);
-            return (match && match[2].length === 11) ? match[2] : url;
+            return (match && match[2].length === 11) ? match[2] : null;
         }
 
-        // Event Listeners for Custom Controls
         document.getElementById('loadBtn').addEventListener('click', () => {
             const input = document.getElementById('urlInput').value.trim();
-            if (input) {
+            if (!input) return;
+
+            if (isUrl(input)) {
                 const videoId = extractVideoId(input);
-                player.loadVideoById(videoId);
+                if (videoId) {
+                    player.loadVideoById(videoId);
+                } else {
+                    document.getElementById('trackTitle').innerText = "Invalid YouTube Link";
+                }
+            } else {
+                // If it's a text query (like "Wait for u"), use YouTube's search list feature
+                document.getElementById('trackTitle').innerText = "Searching for: " + input;
+                player.loadPlaylist({
+                    listType: 'search',
+                    list: input
+                });
             }
         });
 

@@ -34,6 +34,7 @@
             max-width: 480px;
             text-align: center;
             box-sizing: border-box;
+            position: relative;
         }
 
         h2 { margin-top: 0; font-weight: 600; }
@@ -67,7 +68,6 @@
 
         .btn-load { background-color: var(--accent-color); }
         
-        /* Thumbnail Art Window */
         .art-wrapper {
             width: 200px;
             height: 200px;
@@ -94,13 +94,13 @@
             color: #555;
         }
 
-        /* Essential Player Bypass: Kept at 1px to bypass background stream blocks */
-        .hidden-engine {
+        /* FIX: Rendered directly in-bounds so the webview knows it is 'active' */
+        .visible-micro-engine {
             width: 1px;
             height: 1px;
-            opacity: 0.01;
-            position: absolute;
-            top: -1000px;
+            margin: 0 auto;
+            overflow: hidden;
+            background: transparent;
         }
 
         .controls {
@@ -125,9 +125,9 @@
             color: var(--text-muted);
             margin-bottom: 5px;
             font-weight: bold;
+            min-height: 20px;
         }
 
-        /* Cached Playlist Section */
         .playlist-header {
             text-align: left;
             font-size: 14px;
@@ -186,11 +186,15 @@
             <button class="btn-load" id="loadBtn">Load</button>
         </div>
 
-        <div class="track-info" id="trackTitle">No Track Playing</div>
+        <div class="track-info" id="trackTitle">Ready</div>
 
         <div class="art-wrapper" id="artWrapper">
             <span class="music-placeholder" id="iconPlaceholder">🎵</span>
             <img id="albumArt" src="" alt="Thumbnail">
+        </div>
+
+        <div class="visible-micro-engine">
+            <div id="youtube-player"></div>
         </div>
 
         <div class="controls">
@@ -203,16 +207,11 @@
         <div class="list-container" id="listContainer"></div>
     </div>
 
-    <div class="hidden-engine">
-        <div id="youtube-player"></div>
-    </div>
-
     <script>
         const STORAGE_KEY = 'yt_cached_playlist';
         let playlist = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
         let player;
 
-        // Inject YouTube API
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         const firstScriptTag = document.getElementsByTagName('script')[0];
@@ -225,7 +224,8 @@
                 playerVars: {
                     'playsinline': 1,
                     'controls': 0,
-                    'disablekb': 1
+                    'disablekb': 1,
+                    'autoplay': 1
                 },
                 events: {
                     'onReady': onPlayerReady,
@@ -239,7 +239,12 @@
         }
 
         function onPlayerStateChange(event) {
+            // Explicit override force-unmute when transitioning into a playback loop
             if (event.data == YT.PlayerState.PLAYING) {
+                if (player && player.unMute) {
+                    player.unMute();
+                    player.setVolume(100);
+                }
                 const videoData = player.getVideoData();
                 if(videoData && videoData.title) {
                     document.getElementById('trackTitle').innerText = videoData.title;
@@ -257,7 +262,6 @@
             const img = document.getElementById('albumArt');
             const placeholder = document.getElementById('iconPlaceholder');
             if(id) {
-                // Fetching high quality direct frame image from YouTube CDN servers
                 img.src = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
                 img.style.display = 'block';
                 placeholder.style.display = 'none';
@@ -271,10 +275,11 @@
             if (player && player.loadVideoById) {
                 player.loadVideoById({
                     videoId: id,
-                    suggestedQuality: 'small' // Hints API to target low bitrate data profiles
+                    suggestedQuality: 'small' 
                 });
+                if(player.unMute) player.unMute();
                 setAlbumArt(id);
-                document.getElementById('trackTitle').innerText = "Streaming Audio Engine...";
+                document.getElementById('trackTitle').innerText = "Loading stream...";
             }
         }
 
@@ -299,7 +304,8 @@
                 const delBtn = document.createElement('button');
                 delBtn.className = 'btn-delete';
                 delBtn.innerText = 'Remove';
-                delBtn.addEventListener('click', () => {
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     playlist.splice(index, 1);
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
                     renderPlaylist();
@@ -311,7 +317,6 @@
             });
         }
 
-        // Action Directives
         document.getElementById('loadBtn').addEventListener('click', () => {
             const input = document.getElementById('urlInput').value.trim();
             const id = extractVideoId(input);

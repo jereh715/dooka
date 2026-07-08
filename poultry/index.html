@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio-Focused YouTube Player</title>
+    <title>YT Cached Audio Player</title>
     <style>
         :root {
             --bg-color: #121212;
             --container-bg: #1e1e1e;
             --accent-color: #ff0000;
+            --secondary-color: #28a745;
             --text-color: #ffffff;
             --text-muted: #aaaaaa;
         }
@@ -43,7 +44,7 @@
         .search-box {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         input[type="text"] {
@@ -62,56 +63,50 @@
         }
 
         button {
-            background-color: var(--accent-color);
             color: white;
             border: none;
             padding: 12px 20px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
-            transition: background 0.2s;
         }
 
-        button:hover {
-            background-color: #cc0000;
+        .btn-load { background-color: var(--accent-color); }
+        .btn-shuffle { 
+            background-color: var(--secondary-color); 
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            margin-top: 10px;
+            border-radius: 8px;
         }
 
         .video-wrapper {
-            width: 200px;
-            height: 112px;
-            margin: 0 auto 20px auto;
+            width: 280px;
+            height: 157px;
+            margin: 20px auto;
             border-radius: 8px;
             overflow: hidden;
             background: #000;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
-        .controls {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .control-btn {
-            background-color: #333;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-        }
-
-        .control-btn:hover {
-            background-color: #444;
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
         }
 
         .track-info {
             font-size: 14px;
             color: var(--text-muted);
-            margin-bottom: 10px;
-            min-height: 20px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            margin-bottom: 5px;
+        }
+
+        .playlist-count {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 15px;
         }
     </style>
 </head>
@@ -121,62 +116,27 @@
         <h2>YT Audio Dashboard</h2>
         
         <div class="search-box">
-            <input type="text" id="urlInput" placeholder="Enter song title or paste YT link...">
-            <button id="loadBtn">Load</button>
+            <input type="text" id="urlInput" placeholder="Paste YouTube link here...">
+            <button class="btn-load" id="loadBtn">Load</button>
         </div>
 
-        <div class="track-info" id="trackTitle">Ready to search</div>
+        <div class="track-info" id="trackTitle">Paste a link to start your list</div>
+        <div class="playlist-count" id="playlistCount">Saved tracks: 0</div>
 
         <div class="video-wrapper">
-            <div id="youtube-player"></div>
+            <iframe id="videoFrame" src="about:blank" allow="autoplay; encrypted-media"></iframe>
         </div>
 
-        <div class="controls">
-            <button class="control-btn" id="playBtn">Play</button>
-            <button class="control-btn" id="pauseBtn">Pause</button>
-        </div>
+        <button class="btn-shuffle" id="shuffleBtn">🔀 Shuffle Cache Play</button>
     </div>
 
     <script>
-        const tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        // Key used for saving data inside the webview memory
+        const STORAGE_KEY = 'yt_cached_playlist';
 
-        let player;
-
-        function onYouTubeIframeAPIReady() {
-            player = new YT.Player('youtube-player', {
-                width: '200',
-                height: '112',
-                playerVars: {
-                    'playsinline': 1,
-                    'controls': 0, 
-                    'disablekb': 1,
-                    'origin': window.location.origin
-                },
-                events: {
-                    'onReady': onPlayerReady,
-                    'onStateChange': onPlayerStateChange
-                }
-            });
-        }
-
-        function onPlayerReady(event) {
-            document.getElementById('trackTitle').innerText = "Enter a search term above!";
-        }
-
-        function onPlayerStateChange(event) {
-            if (event.data == YT.PlayerState.PLAYING) {
-                const videoData = player.getVideoData();
-                document.getElementById('trackTitle').innerText = videoData.title || "Playing Audio...";
-            }
-        }
-
-        // Checks if input is a URL or plain text search
-        function isUrl(str) {
-            return str.includes('youtube.com') || str.includes('youtu.be');
-        }
+        // Load existing playlist from cache or create a empty one
+        let playlist = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        updatePlaylistCount();
 
         function extractVideoId(url) {
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -184,33 +144,51 @@
             return (match && match[2].length === 11) ? match[2] : null;
         }
 
+        function updatePlaylistCount() {
+            document.getElementById('playlistCount').innerText = `Saved tracks in cache: ${playlist.length}`;
+        }
+
+        function playVideoId(id) {
+            const embedUrl = `https://www.youtube.com/embed/${id}?autoplay=1&modestbranding=1&playsinline=1&rel=0`;
+            document.getElementById('videoFrame').src = embedUrl;
+        }
+
+        // Manual Load Action
         document.getElementById('loadBtn').addEventListener('click', () => {
             const input = document.getElementById('urlInput').value.trim();
             if (!input) return;
 
-            if (isUrl(input)) {
-                const videoId = extractVideoId(input);
-                if (videoId) {
-                    player.loadVideoById(videoId);
-                } else {
-                    document.getElementById('trackTitle').innerText = "Invalid YouTube Link";
+            const videoId = extractVideoId(input);
+            
+            if (videoId) {
+                // Save to cache if it's not already in the list
+                if (!playlist.includes(videoId)) {
+                    playlist.push(videoId);
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+                    updatePlaylistCount();
                 }
+
+                document.getElementById('trackTitle').innerText = "Playing manually loaded track...";
+                playVideoId(videoId);
+                document.getElementById('urlInput').value = ''; // clear input
             } else {
-                // If it's a text query (like "Wait for u"), use YouTube's search list feature
-                document.getElementById('trackTitle').innerText = "Searching for: " + input;
-                player.loadPlaylist({
-                    listType: 'search',
-                    list: input
-                });
+                document.getElementById('trackTitle').innerText = "Error: Please paste a valid YouTube link.";
             }
         });
 
-        document.getElementById('playBtn').addEventListener('click', () => {
-            if (player && player.playVideo) player.playVideo();
-        });
+        // Shuffle Play Action
+        document.getElementById('shuffleBtn').addEventListener('click', () => {
+            if (playlist.length === 0) {
+                document.getElementById('trackTitle').innerText = "Cache empty! Paste and load some links first.";
+                return;
+            }
 
-        document.getElementById('pauseBtn').addEventListener('click', () => {
-            if (player && player.pauseVideo) player.pauseVideo();
+            // Pick a random video ID from the saved playlist array
+            const randomIndex = Math.floor(Math.random() * playlist.length);
+            const randomVideoId = playlist[randomIndex];
+
+            document.getElementById('trackTitle').innerText = `Playing random track (${randomIndex + 1} of ${playlist.length})`;
+            playVideoId(randomVideoId);
         });
     </script>
 </body>

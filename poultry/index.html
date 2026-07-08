@@ -34,7 +34,6 @@
             max-width: 480px;
             text-align: center;
             box-sizing: border-box;
-            position: relative;
         }
 
         h2 { margin-top: 0; font-weight: 600; }
@@ -94,13 +93,19 @@
             color: #555;
         }
 
-        /* FIX: Rendered directly in-bounds so the webview knows it is 'active' */
-        .visible-micro-engine {
-            width: 1px;
+        /* Invisible but physically present container over the controls */
+        .engine-container {
+            position: relative;
+            width: 100%;
             height: 1px;
-            margin: 0 auto;
+            margin: 5px 0;
             overflow: hidden;
-            background: transparent;
+        }
+
+        #youtube-player {
+            width: 100%;
+            height: 100%;
+            opacity: 0.01;
         }
 
         .controls {
@@ -115,6 +120,7 @@
             flex: 1;
             padding: 12px;
             border-radius: 8px;
+            transition: background 0.2s;
         }
         .btn-control:hover { background-color: #444; }
         .btn-shuffle { background-color: var(--secondary-color); }
@@ -193,7 +199,7 @@
             <img id="albumArt" src="" alt="Thumbnail">
         </div>
 
-        <div class="visible-micro-engine">
+        <div class="engine-container">
             <div id="youtube-player"></div>
         </div>
 
@@ -219,13 +225,12 @@
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
-                width: '1',
-                height: '1',
                 playerVars: {
                     'playsinline': 1,
                     'controls': 0,
                     'disablekb': 1,
-                    'autoplay': 1
+                    'autoplay': 1,
+                    'mute': 0
                 },
                 events: {
                     'onReady': onPlayerReady,
@@ -239,7 +244,6 @@
         }
 
         function onPlayerStateChange(event) {
-            // Explicit override force-unmute when transitioning into a playback loop
             if (event.data == YT.PlayerState.PLAYING) {
                 if (player && player.unMute) {
                     player.unMute();
@@ -249,6 +253,10 @@
                 if(videoData && videoData.title) {
                     document.getElementById('trackTitle').innerText = videoData.title;
                 }
+            } else if (event.data == YT.PlayerState.BUFFERING) {
+                document.getElementById('trackTitle').innerText = "Buffering stream...";
+            } else if (event.data == YT.PlayerState.PAUSED) {
+                document.getElementById('trackTitle').innerText = "Paused";
             }
         }
 
@@ -273,11 +281,11 @@
 
         function playTrack(id) {
             if (player && player.loadVideoById) {
-                player.loadVideoById({
-                    videoId: id,
-                    suggestedQuality: 'small' 
-                });
-                if(player.unMute) player.unMute();
+                player.loadVideoById({ videoId: id });
+                if(player.unMute) {
+                    player.unMute();
+                    player.setVolume(100);
+                }
                 setAlbumArt(id);
                 document.getElementById('trackTitle').innerText = "Loading stream...";
             }
@@ -334,8 +342,18 @@
             }
         });
 
-        document.getElementById('playBtn').addEventListener('click', () => { if(player && player.playVideo) player.playVideo(); });
-        document.getElementById('pauseBtn').addEventListener('click', () => { if(player && player.pauseVideo) player.pauseVideo(); });
+        // Combined manual event mappings
+        document.getElementById('playBtn').addEventListener('click', () => { 
+            if(player && player.playVideo) {
+                player.unMute();
+                player.setVolume(100);
+                player.playVideo();
+            }
+        });
+        
+        document.getElementById('pauseBtn').addEventListener('click', () => { 
+            if(player && player.pauseVideo) player.pauseVideo(); 
+        });
         
         document.getElementById('shuffleBtn').addEventListener('click', () => {
             if(playlist.length === 0) return;

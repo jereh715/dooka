@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Operat Base64 Core Test</title>
+    <title>Operat Asset Viewer Workspace</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -20,7 +20,7 @@
             color: #fff;
             border-bottom: 1px solid #232838;
             padding-bottom: 10px;
-            font-weight: 500;
+            font-weight: 400;
         }
         .btn {
             background: #3886ff;
@@ -57,7 +57,7 @@
         }
         .preview-card h3 {
             margin-top: 0;
-            font-size: 14px;
+            font-size: 13px;
             color: #8a94a6;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -95,24 +95,24 @@
 <body>
 
     <div class="container">
-        <h2>Operat Base64 Pipeline Diagnostic</h2>
+        <h2>Operat Media Pipeline Asset Host</h2>
         
-        <button class="btn" onclick="launchSystemPicker()">📂 Summon Device File Picker</button>
+        <button class="btn" onclick="launchDevicePicker()">📂 Invoke Storage Content Intent</button>
         
-        <div id="diagnostic-log" class="status-box">Awaiting operational command execution...</div>
+        <div id="diagnostic-log" class="status-box">Awaiting operational storage picker command execution...</div>
 
         <div class="preview-card">
-            <h3>🖼️ Last Cached Image Payload</h3>
+            <h3>🖼️ Rendered Image Canvas</h3>
             <div class="media-container" id="image-wrapper">
-                <span style="color: #475569; font-size: 13px;">No image active in buffer.</span>
+                <span style="color: #475569; font-size: 13px;">No active bitmap cached in buffer stack.</span>
             </div>
             <div class="meta-details" id="image-meta"></div>
         </div>
 
         <div class="preview-card">
-            <h3>🎵 Last Cached Audio Payload</h3>
+            <h3>🎵 Audio Playback Channel</h3>
             <div class="media-container" id="audio-wrapper">
-                <span style="color: #475569; font-size: 13px;">No audio track active in buffer.</span>
+                <span style="color: #475569; font-size: 13px;">No digital audio track active in buffer stack.</span>
             </div>
             <div class="meta-details" id="audio-meta"></div>
         </div>
@@ -120,94 +120,97 @@
 
     <script>
         const diagnosticLog = document.getElementById('diagnostic-log');
-        let monitoringInterval = null;
+        let pollingInterval = null;
 
-        // 1. Dispatch the native storage selector activity endpoint
-        function launchSystemPicker() {
-            diagnosticLog.innerText = "Dispatched native storage intent hook...";
+        // 1. Fire the native hardware storage access intent endpoint
+        function launchDevicePicker() {
+            diagnosticLog.innerText = "Dispatching Intent action picker hook...";
             fetch('/api/hardware/storage_picker')
                 .then(res => res.json())
                 .then(data => {
-                    diagnosticLog.innerText = "System picker view loaded. Monitoring runtime registry arrays...";
-                    beginCacheMonitoring();
+                    diagnosticLog.innerText = "Native content picker visible. Initializing asynchronous polling tracker...";
+                    startCacheRegistryScan();
                 })
                 .catch(err => {
-                    diagnosticLog.innerText = "Failed to launch device hardware picker: " + err;
+                    diagnosticLog.innerText = "Hardware intent dispatch failure: " + err;
                 });
         }
 
-        // 2. Poll storage/list registry array properties directly instead of parsing string updates
-        function beginCacheMonitoring() {
-            if (monitoringInterval) clearInterval(monitoringInterval);
+        // 2. Poll the state array checking for elements loaded into picked_file_cache
+        function startCacheRegistryScan() {
+            if (pollingInterval) clearInterval(pollingInterval);
             
-            let attempts = 0;
-            monitoringInterval = setInterval(() => {
-                attempts++;
-                diagnosticLog.innerText = `Polling backend data registries... (Attempt ${attempts})`;
+            let pollCounter = 0;
+            pollingInterval = setInterval(() => {
+                pollCounter++;
+                diagnosticLog.innerText = `Scanning storage list api metrics... (Cycle ${pollCounter})`;
                 
                 fetch('/api/storage/list')
                     .then(res => res.json())
                     .then(data => {
                         if (data.files && data.files.length > 0) {
-                            // Extract the newest cached target object inside your array
-                            const freshAsset = data.files[data.files.length - 1];
+                            // Target the most recently inserted item inside the registry cache array
+                            const latestAsset = data.files[data.files.length - 1];
                             
-                            // Check if your backend has completed encoding the byte stream
-                            if (freshAsset.base64_data) {
-                                diagnosticLog.innerText = "Found populated Base64 allocation! Injecting DOM content...";
-                                clearInterval(monitoringInterval);
-                                processAssetDelivery(freshAsset);
+                            // Check if the file contains completed byte streams or an active base64 signature string
+                            if (latestAsset.base64_data || latestAsset.name) {
+                                diagnosticLog.innerText = `Discovered dynamic asset reference context! Binding payload stream...`;
+                                clearInterval(pollingInterval);
+                                renderMediaElement(latestAsset);
                             }
                         }
                     })
                     .catch(err => {
-                        console.error("Cache pull error:", err);
+                        console.error("Storage descriptor endpoint access block:", err);
                     });
 
-                // Fail-safe cutoff loop limit (45 seconds) to handle user cancellation
-                if (attempts > 30) {
-                    clearInterval(monitoringInterval);
-                    diagnosticLog.innerText = "Monitoring cycle timed out. Re-open picker context.";
+                // Automated execution safe safety cutoff boundary threshold limit (45 seconds)
+                if (pollCounter > 30) {
+                    clearInterval(pollingInterval);
+                    diagnosticLog.innerText = "Scanning framework sequence timed out. Re-fire selection context intent.";
                 }
             }, 1500);
         }
 
-        // 3. Inspect payload formatting maps and link data streams onto source properties
-        function processAssetDelivery(asset) {
+        // 3. Dynamically append corresponding nodes onto DOM layers safely referencing back via clean binary or base64 streams
+        function renderMediaElement(asset) {
             const isImage = asset.mime.startsWith('image/');
             const isAudio = asset.mime.startsWith('audio/');
+            
+            // Prefer using the streaming direct raw content URL path loop fallback for fallback compatibility assurance
+            const sourceStreamUrl = asset.base64_data ? asset.base64_data : `/api/storage/raw/${encodeURIComponent(asset.name)}`;
 
             if (isImage) {
-                const imgElement = document.createElement('img');
-                imgElement.className = 'preview-target';
-                imgElement.src = asset.base64_data; // Pure data-uri structure binding
+                const imgNode = document.createElement('img');
+                imgNode.className = 'preview-target';
+                imgNode.src = sourceStreamUrl;
                 
                 const wrapper = document.getElementById('image-wrapper');
                 wrapper.innerHTML = '';
-                wrapper.appendChild(imgElement);
+                wrapper.appendChild(imgNode);
                 
                 document.getElementById('image-meta').innerText = 
-                    `Name: ${asset.name}\nMIME: ${asset.mime}\nSize: ${asset.size}\nBase64 Header: ${asset.base64_data.substring(0, 50)}...`;
+                    `Identifier: ${asset.name}\nMIME Class: ${asset.mime}\nAllocated Allocation: ${asset.size}`;
                 
-                diagnosticLog.innerText = `✅ Image asset mounted cleanly (${asset.size})`;
+                diagnosticLog.innerText = `✅ Image component canvas mounted cleanly via stream context.`;
             } 
             else if (isAudio) {
-                const audioElement = document.createElement('audio');
-                audioElement.className = 'preview-target';
-                audioElement.controls = true;
-                audioElement.src = asset.base64_data; // Pure data-uri structure binding
+                const audioNode = document.createElement('audio');
+                audioNode.className = 'preview-target';
+                audioNode.controls = true;
+                audioNode.src = sourceStreamUrl;
                 
                 const wrapper = document.getElementById('audio-wrapper');
                 wrapper.innerHTML = '';
-                wrapper.appendChild(audioElement);
+                wrapper.appendChild(audioNode);
                 
                 document.getElementById('audio-meta').innerText = 
-                    `Name: ${asset.name}\nMIME: ${asset.mime}\nSize: ${asset.size}\nBase64 Header: ${asset.base64_data.substring(0, 50)}...`;
+                    `Identifier: ${asset.name}\nMIME Class: ${asset.mime}\nAllocated Allocation: ${asset.size}`;
                 
-                diagnosticLog.innerText = `✅ Audio tracking engine mounted cleanly (${asset.size})`;
+                diagnosticLog.innerText = `✅ Audio track audio channel layer initialized cleanly via stream context.`;
             } 
             else {
-                diagnosticLog.innerText = `File processed, but MIME type "${asset.mime}" does not match preview components.`;
+                diagnosticLog.innerText = `Asset parsed safely, but MIME signature structure matches no preview layer elements ("${asset.mime}").`;
             }
         }
     </script>

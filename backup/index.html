@@ -88,6 +88,7 @@
             color: #64748b;
             margin-top: 8px;
             font-family: monospace;
+            white-space: pre-wrap;
         }
     </style>
 </head>
@@ -119,100 +120,94 @@
 
     <script>
         const diagnosticLog = document.getElementById('diagnostic-log');
-        let pollingHandle = null;
+        let monitoringInterval = null;
 
-        // 1. Fire up the native system file selector
+        // 1. Dispatch the native storage selector activity endpoint
         function launchSystemPicker() {
             diagnosticLog.innerText = "Dispatched native storage intent hook...";
             fetch('/api/hardware/storage_picker')
                 .then(res => res.json())
                 .then(data => {
-                    diagnosticLog.innerText = "System activity view open. Awaiting user file selection...";
-                    beginStatusVerification();
+                    diagnosticLog.innerText = "System picker view loaded. Monitoring runtime registry arrays...";
+                    beginCacheMonitoring();
                 })
                 .catch(err => {
-                    diagnosticLog.innerText = "Failed to open layout picker: " + err;
+                    diagnosticLog.innerText = "Failed to launch device hardware picker: " + err;
                 });
         }
 
-        // 2. Poll /api/status to intercept when storage writing locks clear cleanly
-        function beginStatusVerification() {
-            if (pollingHandle) clearInterval(pollingHandle);
+        // 2. Poll storage/list registry array properties directly instead of parsing string updates
+        function beginCacheMonitoring() {
+            if (monitoringInterval) clearInterval(monitoringInterval);
             
-            pollingHandle = setInterval(() => {
-                fetch('/api/status')
+            let attempts = 0;
+            monitoringInterval = setInterval(() => {
+                attempts++;
+                diagnosticLog.innerText = `Polling backend data registries... (Attempt ${attempts})`;
+                
+                fetch('/api/storage/list')
                     .then(res => res.json())
                     .then(data => {
-                        diagnosticLog.innerText = data.status;
-                        
-                        if (data.status.includes("Imported asset cached successfully:")) {
-                            clearInterval(pollingHandle);
-                            queryRuntimeCacheRegistry();
+                        if (data.files && data.files.length > 0) {
+                            // Extract the newest cached target object inside your array
+                            const freshAsset = data.files[data.files.length - 1];
+                            
+                            // Check if your backend has completed encoding the byte stream
+                            if (freshAsset.base64_data) {
+                                diagnosticLog.innerText = "Found populated Base64 allocation! Injecting DOM content...";
+                                clearInterval(monitoringInterval);
+                                processAssetDelivery(freshAsset);
+                            }
                         }
+                    })
+                    .catch(err => {
+                        console.error("Cache pull error:", err);
                     });
-            }, 1000);
+
+                // Fail-safe cutoff loop limit (45 seconds) to handle user cancellation
+                if (attempts > 30) {
+                    clearInterval(monitoringInterval);
+                    diagnosticLog.innerText = "Monitoring cycle timed out. Re-open picker context.";
+                }
+            }, 1500);
         }
 
-        // 3. Scan the runtime storage map array
-        function queryRuntimeCacheRegistry() {
-            diagnosticLog.innerText = "Interrogating memory cache structures...";
-            fetch('/api/storage/list')
-                .then(res => res.json())
-                .then(data => {
-                    if (!data.files || data.files.length === 0) {
-                        diagnosticLog.innerText = "System returned execution success, but cache registry is empty.";
-                        return;
-                    }
-
-                    // Extract the absolute newest file dropped into the cache loop
-                    const freshAsset = data.files[data.files.length - 1];
-                    processAssetDelivery(freshAsset);
-                });
-        }
-
-        // 4. Inspect the payload data and apply Base64 maps straight to the DOM elements
+        // 3. Inspect payload formatting maps and link data streams onto source properties
         function processAssetDelivery(asset) {
-            diagnosticLog.innerText = `Evaluating payload: ${asset.name} | Mime: ${asset.mime} | Size: ${asset.size}`;
+            const isImage = asset.mime.startsWith('image/');
+            const isAudio = asset.mime.startsWith('audio/');
 
-            if (!asset.base64_data) {
-                diagnosticLog.innerText = `⚠️ Base64 data missing for ${asset.name}. Ensure file size is under 20MB.`;
-                return;
-            }
-
-            // Verify if payload belongs to an image spectrum
-            if (asset.mime.startsWith('image/')) {
+            if (isImage) {
                 const imgElement = document.createElement('img');
                 imgElement.className = 'preview-target';
-                imgElement.src = asset.base64_data; // Bind data URL string natively
+                imgElement.src = asset.base64_data; // Pure data-uri structure binding
                 
                 const wrapper = document.getElementById('image-wrapper');
                 wrapper.innerHTML = '';
                 wrapper.appendChild(imgElement);
                 
                 document.getElementById('image-meta').innerText = 
-                    `Name: ${asset.name}\nMIME: ${asset.mime}\nSize: ${asset.size}\nBase64 Header: ${asset.base64_data.substring(0, 45)}...`;
+                    `Name: ${asset.name}\nMIME: ${asset.mime}\nSize: ${asset.size}\nBase64 Header: ${asset.base64_data.substring(0, 50)}...`;
                 
-                diagnosticLog.innerText = `✅ Image Base64 loaded successfully (${asset.size})`;
+                diagnosticLog.innerText = `✅ Image asset mounted cleanly (${asset.size})`;
             } 
-            // Verify if payload belongs to an audio spectrum
-            else if (asset.mime.startsWith('audio/')) {
+            else if (isAudio) {
                 const audioElement = document.createElement('audio');
                 audioElement.className = 'preview-target';
                 audioElement.controls = true;
-                audioElement.src = asset.base64_data; // Bind data URL string natively
+                audioElement.src = asset.base64_data; // Pure data-uri structure binding
                 
                 const wrapper = document.getElementById('audio-wrapper');
                 wrapper.innerHTML = '';
                 wrapper.appendChild(audioElement);
                 
                 document.getElementById('audio-meta').innerText = 
-                    `Name: ${asset.name}\nMIME: ${asset.mime}\nSize: ${asset.size}\nBase64 Header: ${asset.base64_data.substring(0, 45)}...`;
+                    `Name: ${asset.name}\nMIME: ${asset.mime}\nSize: ${asset.size}\nBase64 Header: ${asset.base64_data.substring(0, 50)}...`;
                 
-                diagnosticLog.innerText = `✅ Audio Base64 loaded successfully (${asset.size})`;
+                diagnosticLog.innerText = `✅ Audio tracking engine mounted cleanly (${asset.size})`;
             } 
-            // Catch-all structural boundary logic
             else {
-                diagnosticLog.innerText = `Asset cached, but structure format is unmapped for viewer: ${asset.mime}`;
+                diagnosticLog.innerText = `File processed, but MIME type "${asset.mime}" does not match preview components.`;
             }
         }
     </script>

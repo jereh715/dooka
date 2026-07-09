@@ -1,92 +1,154 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Native Audio Capture Laboratory</title>
+    <title>Operat Image Viewer Launcher</title>
     <style>
-        body { font-family: sans-serif; background: #0f111a; color: #fff; padding: 20px; text-align: center; }
-        .player-card { background: #161925; padding: 20px; border-radius: 12px; border: 1px solid #232838; max-width: 500px; margin: 0 auto; }
-        .btn { background: #ea4335; color: white; border: none; padding: 14px 24px; border-radius: 6px; font-weight: bold; cursor: pointer; margin: 8px 5px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
-        .btn-sync { background: #2c3143; color: #a2aab8; padding: 10px 16px; font-size: 13px; }
-        .file-list { margin-top: 15px; text-align: left; background: #12141c; border-radius: 6px; max-height: 180px; overflow-y: auto; padding: 8px; border: 1px solid #232838; }
-        .file-item { padding: 10px; border-bottom: 1px solid #232838; cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; }
-        .file-item:hover { background: #222736; }
-        .status-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #3886ff; color: white; font-family: monospace; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f111a;
+            color: #e1e4ed;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h2 {
+            color: #fff;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            background: #3886ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            box-shadow: 0 4px 6px rgba(56, 134, 255, 0.2);
+        }
+        .btn:hover {
+            background: #2a75e6;
+        }
+        .status-text {
+            margin: 15px 0;
+            font-size: 13px;
+            color: #8a94a6;
+            font-family: monospace;
+        }
+        .image-preview-card {
+            background: #1a1d29;
+            border: 1px solid #232838;
+            border-radius: 12px;
+            padding: 10px;
+            margin-top: 25px;
+            display: none;
+        }
+        .image-preview-card img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
+        }
+        .file-name {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #3886ff;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
 
-    <div class="player-card">
-        <h3>🎙️ Native Audio Capturing Desk</h3>
-        <p style="color: #8a94a6; font-size: 13px; margin-bottom: 20px;">
-            Summons the hardware recorder framework via Python bridge interfaces.
-        </p>
+    <div class="container">
+        <h2>MiniApp Storage Explorer</h2>
+        
+        <button class="btn" onclick="openNativePicker()">📂 Select Image from Device</button>
+        
+        <div id="status-display" class="status-text">Ready to request asset bridge...</div>
 
-        <button class="btn" onclick="summonNativeRecorder()">🔴 Launch Native Audio Recorder</button>
-        <button class="btn btn-sync" onclick="refreshLibrary()">🔄 Sync Library View</button>
-        
-        <div class="file-list" id="audio-track-container"></div>
-        
-        <h4 id="current-selection" style="color:#8a94a6; font-size:13px; margin-top:20px; text-align: left;">Selected: None</h4>
-        <audio id="audio-playback-engine" controls style="width:100%; margin-top:10px;"></audio>
+        <div id="preview-card" class="image-preview-card">
+            <img id="viewer-target" src="" alt="Selected Target Graphic">
+            <div id="filename-label" class="file-name"></div>
+        </div>
     </div>
 
     <script>
-        // 1. Fire the native Intent request via Flask routing mechanics
-        function summonNativeRecorder() {
-            fetch('/api/hardware/record_audio')
-                .then(r => r.json())
-                .then(d => {
-                    // Poll the storage list every second for 8 seconds to catch 
-                    // the incoming audio file asset data as soon as the user finishes recording
-                    let checkCount = 0;
-                    let trackingLoop = setInterval(() => {
-                        refreshLibrary();
-                        checkCount++;
-                        if (checkCount > 8) clearInterval(trackingLoop);
-                    }, 1000);
-                });
-        }
+        const statusDisplay = document.getElementById('status-display');
+        const previewCard = document.getElementById('preview-card');
+        const viewerTarget = document.getElementById('viewer-target');
+        const filenameLabel = document.getElementById('filename-label');
 
-        // 2. Scan memory buffer allocations and files system arrays
-        function refreshLibrary() {
-            fetch('/api/storage/list')
-                .then(r => r.json())
+        // 1. Kick off the Native Android Storage Intent via your API
+        function openNativePicker() {
+            statusDisplay.innerText = "Opening system file provider...";
+            fetch('/api/hardware/storage_picker')
+                .then(res => res.json())
                 .then(data => {
-                    let html = '';
-                    if(!data.files || data.files.length === 0) {
-                        html = '<div style="padding:10px; color:#697386; font-size:12px; text-align:center;">No captured voice notes or tracks found.</div>';
-                    } else {
-                        data.files.forEach(f => {
-                            // Escape quotes to handle standard Android display layouts
-                            let cleanName = f.name.replace(/'/g, "\\'");
-                            let isVoiceRecord = f.name.toLowerCase().includes('audio') || f.name.toLowerCase().includes('record');
-                            let icon = isVoiceRecord ? '🎙️' : '🎵';
-                            
-                            html += `
-                            <div class="file-item" onclick="loadTrackStream('${cleanName}')">
-                                <span>${icon} ${f.name}</span>
-                                <span class="status-badge">${f.size}</span>
-                            </div>`;
-                        });
-                    }
-                    document.getElementById('audio-track-container').innerHTML = html;
+                    statusDisplay.innerText = "System picker active. Awaiting selection...";
+                    // Start polling the backend status to look for completion
+                    startStatusPolling();
+                })
+                .catch(err => {
+                    statusDisplay.innerText = "Error launching picker: " + err;
                 });
         }
 
-        // 3. Command the layout audio engine to pipe partial byte content vectors
-        function loadTrackStream(filename) {
-            document.getElementById('current-selection').innerText = "Playing Audio: " + filename;
-            const engine = document.getElementById('audio-playback-engine');
+        // 2. Poll /api/status until the bridge signals a successful cache operation
+        let pollInterval = null;
+        function startStatusPolling() {
+            if (pollInterval) clearInterval(pollInterval);
             
-            engine.pause();
-            engine.src = `/api/storage/raw/${encodeURIComponent(filename)}`;
-            engine.load();
-            engine.play().catch(err => console.log("Engine initialization halted: ", err));
+            pollInterval = setInterval(() => {
+                fetch('/api/status')
+                    .then(res => res.json())
+                    .then(data => {
+                        statusDisplay.innerText = data.status;
+                        
+                        // Look for your distinct success message committed inside handler.py
+                        if (data.status.includes("Imported asset cached successfully:")) {
+                            clearInterval(pollInterval);
+                            fetchLatestCachedFile();
+                        }
+                    });
+            }, 1000); // Check every second
         }
 
-        // Run verification loop on initial component compilation
-        refreshLibrary();
+        // 3. Look up the cached storage directory list to grab the newest file name
+        function fetchLatestCachedFile() {
+            fetch('/api/storage/list')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.files && data.files.length > 0) {
+                        // Pull the most recently imported file from the list
+                        const targetFile = data.files[data.files.length - 1];
+                        displayImage(targetFile.name);
+                    } else {
+                        statusDisplay.innerText = "Status: Cache processing done, but file registry is empty.";
+                    }
+                });
+        }
+
+        // 4. Render the image by pointing its source straight to your raw delivery route
+        function displayImage(filename) {
+            // Point the src directly to your unrestricted raw storage stream endpoint
+            // Cache bust with a unique timestamp query parameter just in case
+            const timestamp = new Date().getTime();
+            viewerTarget.src = `/api/storage/raw/${encodeURIComponent(filename)}?t=${timestamp}`;
+            
+            filenameLabel.innerText = filename;
+            previewCard.style.display = 'block';
+            statusDisplay.innerText = "Status: Image loaded seamlessly via loopback streaming framework.";
+        }
     </script>
 </body>
 </html>

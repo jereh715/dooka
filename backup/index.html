@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Operat Image Viewer Launcher</title>
+    <title>Operat Base64 Core Test</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -11,143 +11,209 @@
             color: #e1e4ed;
             margin: 0;
             padding: 20px;
-            text-align: center;
         }
         .container {
-            max-width: 500px;
+            max-width: 600px;
             margin: 0 auto;
         }
         h2 {
             color: #fff;
+            border-bottom: 1px solid #232838;
+            padding-bottom: 10px;
             font-weight: 500;
-            margin-bottom: 20px;
         }
         .btn {
-            display: inline-block;
             background: #3886ff;
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
+            padding: 12px 20px;
+            border-radius: 6px;
             font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            transition: background 0.2s;
-            box-shadow: 0 4px 6px rgba(56, 134, 255, 0.2);
+            width: 100%;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(56, 134, 255, 0.15);
         }
-        .btn:hover {
-            background: #2a75e6;
-        }
-        .status-text {
-            margin: 15px 0;
-            font-size: 13px;
-            color: #8a94a6;
+        .btn:hover { background: #2a75e6; }
+        
+        .status-box {
+            background: #161925;
+            border-left: 4px solid #3886ff;
+            padding: 12px;
             font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 20px;
+            color: #7dd3fc;
+            word-break: break-all;
         }
-        .image-preview-card {
+
+        .preview-card {
             background: #1a1d29;
             border: 1px solid #232838;
-            border-radius: 12px;
-            padding: 10px;
-            margin-top: 25px;
-            display: none;
-        }
-        .image-preview-card img {
-            max-width: 100%;
-            height: auto;
             border-radius: 8px;
-            display: block;
-            margin: 0 auto;
+            padding: 15px;
+            margin-top: 15px;
         }
-        .file-name {
-            margin-top: 10px;
-            font-size: 12px;
-            color: #3886ff;
-            word-break: break-all;
+        .preview-card h3 {
+            margin-top: 0;
+            font-size: 14px;
+            color: #8a94a6;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .media-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #0b0c13;
+            border-radius: 6px;
+            padding: 10px;
+            min-height: 60px;
+        }
+
+        img.preview-target {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 4px;
+            object-fit: contain;
+        }
+        audio.preview-target {
+            width: 100%;
+        }
+
+        .meta-details {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 8px;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h2>MiniApp Storage Explorer</h2>
+        <h2>Operat Base64 Pipeline Diagnostic</h2>
         
-        <button class="btn" onclick="openNativePicker()">📂 Select Image from Device</button>
+        <button class="btn" onclick="launchSystemPicker()">📂 Summon Device File Picker</button>
         
-        <div id="status-display" class="status-text">Ready to request asset bridge...</div>
+        <div id="diagnostic-log" class="status-box">Awaiting operational command execution...</div>
 
-        <div id="preview-card" class="image-preview-card">
-            <img id="viewer-target" src="" alt="Selected Target Graphic">
-            <div id="filename-label" class="file-name"></div>
+        <div class="preview-card">
+            <h3>🖼️ Last Cached Image Payload</h3>
+            <div class="media-container" id="image-wrapper">
+                <span style="color: #475569; font-size: 13px;">No image active in buffer.</span>
+            </div>
+            <div class="meta-details" id="image-meta"></div>
+        </div>
+
+        <div class="preview-card">
+            <h3>🎵 Last Cached Audio Payload</h3>
+            <div class="media-container" id="audio-wrapper">
+                <span style="color: #475569; font-size: 13px;">No audio track active in buffer.</span>
+            </div>
+            <div class="meta-details" id="audio-meta"></div>
         </div>
     </div>
 
     <script>
-        const statusDisplay = document.getElementById('status-display');
-        const previewCard = document.getElementById('preview-card');
-        const viewerTarget = document.getElementById('viewer-target');
-        const filenameLabel = document.getElementById('filename-label');
+        const diagnosticLog = document.getElementById('diagnostic-log');
+        let pollingHandle = null;
 
-        // 1. Kick off the Native Android Storage Intent via your API
-        function openNativePicker() {
-            statusDisplay.innerText = "Opening system file provider...";
+        // 1. Fire up the native system file selector
+        function launchSystemPicker() {
+            diagnosticLog.innerText = "Dispatched native storage intent hook...";
             fetch('/api/hardware/storage_picker')
                 .then(res => res.json())
                 .then(data => {
-                    statusDisplay.innerText = "System picker active. Awaiting selection...";
-                    // Start polling the backend status to look for completion
-                    startStatusPolling();
+                    diagnosticLog.innerText = "System activity view open. Awaiting user file selection...";
+                    beginStatusVerification();
                 })
                 .catch(err => {
-                    statusDisplay.innerText = "Error launching picker: " + err;
+                    diagnosticLog.innerText = "Failed to open layout picker: " + err;
                 });
         }
 
-        // 2. Poll /api/status until the bridge signals a successful cache operation
-        let pollInterval = null;
-        function startStatusPolling() {
-            if (pollInterval) clearInterval(pollInterval);
+        // 2. Poll /api/status to intercept when storage writing locks clear cleanly
+        function beginStatusVerification() {
+            if (pollingHandle) clearInterval(pollingHandle);
             
-            pollInterval = setInterval(() => {
+            pollingHandle = setInterval(() => {
                 fetch('/api/status')
                     .then(res => res.json())
                     .then(data => {
-                        statusDisplay.innerText = data.status;
+                        diagnosticLog.innerText = data.status;
                         
-                        // Look for your distinct success message committed inside handler.py
                         if (data.status.includes("Imported asset cached successfully:")) {
-                            clearInterval(pollInterval);
-                            fetchLatestCachedFile();
+                            clearInterval(pollingHandle);
+                            queryRuntimeCacheRegistry();
                         }
                     });
-            }, 1000); // Check every second
+            }, 1000);
         }
 
-        // 3. Look up the cached storage directory list to grab the newest file name
-        function fetchLatestCachedFile() {
+        // 3. Scan the runtime storage map array
+        function queryRuntimeCacheRegistry() {
+            diagnosticLog.innerText = "Interrogating memory cache structures...";
             fetch('/api/storage/list')
                 .then(res => res.json())
                 .then(data => {
-                    if (data.files && data.files.length > 0) {
-                        // Pull the most recently imported file from the list
-                        const targetFile = data.files[data.files.length - 1];
-                        displayImage(targetFile.name);
-                    } else {
-                        statusDisplay.innerText = "Status: Cache processing done, but file registry is empty.";
+                    if (!data.files || data.files.length === 0) {
+                        diagnosticLog.innerText = "System returned execution success, but cache registry is empty.";
+                        return;
                     }
+
+                    // Extract the absolute newest file dropped into the cache loop
+                    const freshAsset = data.files[data.files.length - 1];
+                    processAssetDelivery(freshAsset);
                 });
         }
 
-        // 4. Render the image by pointing its source straight to your raw delivery route
-        function displayImage(filename) {
-            // Point the src directly to your unrestricted raw storage stream endpoint
-            // Cache bust with a unique timestamp query parameter just in case
-            const timestamp = new Date().getTime();
-            viewerTarget.src = `/api/storage/raw/${encodeURIComponent(filename)}?t=${timestamp}`;
-            
-            filenameLabel.innerText = filename;
-            previewCard.style.display = 'block';
-            statusDisplay.innerText = "Status: Image loaded seamlessly via loopback streaming framework.";
+        // 4. Inspect the payload data and apply Base64 maps straight to the DOM elements
+        function processAssetDelivery(asset) {
+            diagnosticLog.innerText = `Evaluating payload: ${asset.name} | Mime: ${asset.mime} | Size: ${asset.size}`;
+
+            if (!asset.base64_data) {
+                diagnosticLog.innerText = `⚠️ Base64 data missing for ${asset.name}. Ensure file size is under 20MB.`;
+                return;
+            }
+
+            // Verify if payload belongs to an image spectrum
+            if (asset.mime.startsWith('image/')) {
+                const imgElement = document.createElement('img');
+                imgElement.className = 'preview-target';
+                imgElement.src = asset.base64_data; // Bind data URL string natively
+                
+                const wrapper = document.getElementById('image-wrapper');
+                wrapper.innerHTML = '';
+                wrapper.appendChild(imgElement);
+                
+                document.getElementById('image-meta').innerText = 
+                    `Name: ${asset.name}\nMIME: ${asset.mime}\nSize: ${asset.size}\nBase64 Header: ${asset.base64_data.substring(0, 45)}...`;
+                
+                diagnosticLog.innerText = `✅ Image Base64 loaded successfully (${asset.size})`;
+            } 
+            // Verify if payload belongs to an audio spectrum
+            else if (asset.mime.startsWith('audio/')) {
+                const audioElement = document.createElement('audio');
+                audioElement.className = 'preview-target';
+                audioElement.controls = true;
+                audioElement.src = asset.base64_data; // Bind data URL string natively
+                
+                const wrapper = document.getElementById('audio-wrapper');
+                wrapper.innerHTML = '';
+                wrapper.appendChild(audioElement);
+                
+                document.getElementById('audio-meta').innerText = 
+                    `Name: ${asset.name}\nMIME: ${asset.mime}\nSize: ${asset.size}\nBase64 Header: ${asset.base64_data.substring(0, 45)}...`;
+                
+                diagnosticLog.innerText = `✅ Audio Base64 loaded successfully (${asset.size})`;
+            } 
+            // Catch-all structural boundary logic
+            else {
+                diagnosticLog.innerText = `Asset cached, but structure format is unmapped for viewer: ${asset.mime}`;
+            }
         }
     </script>
 </body>

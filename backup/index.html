@@ -62,57 +62,49 @@
 
         iframe.addEventListener('load', () => {
             try {
-                const innerDoc = iframe.contentWindow.document;
+                const innerWin = iframe.contentWindow;
+                const innerDoc = innerWin.document;
                 const audioPlayer = innerDoc.getElementById('audio-player');
                 const videoPlayer = innerDoc.getElementById('video-player');
 
-                // Strategy: Find the clean text name being displayed in the player UI
-                const getCleanTrackName = () => {
-                    // 1. Check for standard title containers or headers in your player UI
-                    const uiTitle = innerDoc.querySelector('h2') || 
-                                    innerDoc.querySelector('.track-title') || 
-                                    innerDoc.getElementById('current-track-name');
-                    
-                    if (uiTitle && uiTitle.innerText.trim()) {
-                        return uiTitle.innerText.trim();
-                    }
+                // Cross-reference the player's active src with its own mediaDatabase object
+                const getTrackNameFromDatabase = (playerElement) => {
+                    if (!playerElement || !playerElement.src) return null;
 
-                    // 2. Look for the actively selected list row (e.g., matching a background color or active class)
-                    const activeRow = innerDoc.querySelector('.bg-blue-600') || 
-                                      innerDoc.querySelector('.active-track') ||
-                                      innerDoc.querySelector('[class*="bg-opacity"]'); // Tailored for highlights
-                    if (activeRow) {
-                        return activeRow.innerText.trim();
-                    }
+                    try {
+                        // Extract and decode the uri value from the query string
+                        const urlParams = new URLSearchParams(playerElement.src.split('?')[1]);
+                        const activeUri = urlParams.get('uri');
+                        
+                        if (!activeUri) return null;
 
+                        // Pull the active media type tab category straight from the iframe's runtime variable
+                        const currentTab = innerWin.currentTab || "Audio";
+                        const mediaItems = innerWin.mediaDatabase ? innerWin.mediaDatabase[currentTab] : {};
+
+                        // Find the human-readable display key that matches the current uri
+                        for (const [displayName, uri] of Object.entries(mediaItems)) {
+                            if (uri === activeUri) {
+                                return displayName;
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Failed to map runtime media database:", e);
+                    }
                     return null;
                 };
 
-                // Helper function to extract track name and fire notification endpoint
+                // Helper function to trigger notification endpoint
                 const triggerTrackNotification = (playerElement) => {
-                    let trackName = getCleanTrackName();
+                    const trackName = getTrackNameFromDatabase(playerElement);
 
-                    // Fallback: If the DOM scraper couldn't find a text element, parse the URI string
-                    if (!trackName && playerElement && playerElement.src) {
-                        const urlParams = new URLSearchParams(playerElement.src.split('?')[1]);
-                        const rawUri = urlParams.get('uri');
-                        
-                        if (rawUri) {
-                            trackName = decodeURIComponent(rawUri);
-                            if (trackName.includes('/')) {
-                                trackName = trackName.substring(trackName.lastIndexOf('/') + 1);
-                            }
-                        }
-                    }
-
-                    // Fire the notification API request with the parsed clean name
                     if (trackName) {
                         fetch(`/api/hardware/notification?title=Now+Playing&msg=${encodeURIComponent(trackName)}`)
                             .catch(err => console.error("MiniApp bridge failed to fire notification:", err));
                     }
                 };
 
-                // Attach 'play' event listeners to both native media HTML tags inside the player module
+                // Attach 'play' event listeners to the native media HTML tags
                 if (audioPlayer) {
                     audioPlayer.addEventListener('play', () => triggerTrackNotification(audioPlayer));
                 }

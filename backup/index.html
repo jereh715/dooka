@@ -56,6 +56,51 @@
                 console.log("[MINIAPP BRIDGE]: Refreshed underlying module layer.");
             }
         }
+
+        // Wait for the iframe window to load fully before attaching media stream listeners
+        const iframe = document.getElementById('player-frame');
+
+        iframe.addEventListener('load', () => {
+            try {
+                const innerDoc = iframe.contentWindow.document;
+                const audioPlayer = innerDoc.getElementById('audio-player');
+                const videoPlayer = innerDoc.getElementById('video-player');
+
+                // Helper function to extract the track name and fire the notification endpoint
+                const triggerTrackNotification = (playerElement) => {
+                    if (playerElement && playerElement.src) {
+                        // Extract and decode the uri query parameter from the /player/stream?uri=... URL
+                        const urlParams = new URLSearchParams(playerElement.src.split('?')[1]);
+                        const rawUri = urlParams.get('uri');
+                        
+                        if (rawUri) {
+                            // Clean up the native URI string to parse a readable filename
+                            let trackName = decodeURIComponent(rawUri);
+                            
+                            // If it contains a full internal system path, split it to get just the filename
+                            if (trackName.includes('/')) {
+                                trackName = trackName.substring(trackName.lastIndexOf('/') + 1);
+                            }
+
+                            // Fire the notification API request straight from the index.html context
+                            fetch(`/api/hardware/notification?title=Now+Playing&msg=${encodeURIComponent(trackName)}`)
+                                .catch(err => console.error("MiniApp bridge failed to fire notification:", err));
+                        }
+                    }
+                };
+
+                // Attach 'play' event listeners to both native media HTML tags inside the player module
+                if (audioPlayer) {
+                    audioPlayer.addEventListener('play', () => triggerTrackNotification(audioPlayer));
+                }
+                if (videoPlayer) {
+                    videoPlayer.addEventListener('play', () => triggerTrackNotification(videoPlayer));
+                }
+
+            } catch (error) {
+                console.error("Could not link media listeners due to iframe security context or loading constraints:", error);
+            }
+        });
     </script>
 </body>
 </html>

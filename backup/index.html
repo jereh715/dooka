@@ -48,7 +48,6 @@
     </div>
 
     <script>
-        // Simple bridge function to reload the inner Flask workspace blueprint frame
         function reloadPlayer() {
             const frame = document.getElementById('player-frame');
             if (frame) {
@@ -57,63 +56,32 @@
             }
         }
 
-        // Wait for the iframe window to load fully before attaching media stream listeners
         const iframe = document.getElementById('player-frame');
 
         iframe.addEventListener('load', () => {
             try {
                 const innerWin = iframe.contentWindow;
-                const innerDoc = innerWin.document;
-                const audioPlayer = innerDoc.getElementById('audio-player');
-                const videoPlayer = innerDoc.getElementById('video-player');
 
-                // Cross-reference the player's active src with its own mediaDatabase object
-                const getTrackNameFromDatabase = (playerElement) => {
-                    if (!playerElement || !playerElement.src) return null;
+                if (innerWin && innerWin.selectMedia) {
+                    // Save the original selectMedia function from player.py
+                    const originalSelectMedia = innerWin.selectMedia;
 
-                    try {
-                        // Extract and decode the uri value from the query string
-                        const urlParams = new URLSearchParams(playerElement.src.split('?')[1]);
-                        const activeUri = urlParams.get('uri');
-                        
-                        if (!activeUri) return null;
+                    // Intercept it with our wrapper
+                    innerWin.selectMedia = function(name, uri) {
+                        console.log("[MINIAPP] Intercepted track selection:", name);
 
-                        // Pull the active media type tab category straight from the iframe's runtime variable
-                        const currentTab = innerWin.currentTab || "Audio";
-                        const mediaItems = innerWin.mediaDatabase ? innerWin.mediaDatabase[currentTab] : {};
+                        // Fire the native notification endpoint directly using the clean 'name' parameter
+                        fetch(`/api/hardware/notification?title=Now+Playing&msg=${encodeURIComponent(name)}`)
+                            .catch(err => console.error("MiniApp bridge notification failed:", err));
 
-                        // Find the human-readable display key that matches the current uri
-                        for (const [displayName, uri] of Object.entries(mediaItems)) {
-                            if (uri === activeUri) {
-                                return displayName;
-                            }
-                        }
-                    } catch (e) {
-                        console.error("Failed to map runtime media database:", e);
-                    }
-                    return null;
-                };
-
-                // Helper function to trigger notification endpoint
-                const triggerTrackNotification = (playerElement) => {
-                    const trackName = getTrackNameFromDatabase(playerElement);
-
-                    if (trackName) {
-                        fetch(`/api/hardware/notification?title=Now+Playing&msg=${encodeURIComponent(trackName)}`)
-                            .catch(err => console.error("MiniApp bridge failed to fire notification:", err));
-                    }
-                };
-
-                // Attach 'play' event listeners to the native media HTML tags
-                if (audioPlayer) {
-                    audioPlayer.addEventListener('play', () => triggerTrackNotification(audioPlayer));
+                        // Call the original player logic so the music actually plays
+                        return originalSelectMedia.apply(this, arguments);
+                    };
+                    
+                    console.log("[MINIAPP BRIDGE]: Function hook injection successful.");
                 }
-                if (videoPlayer) {
-                    videoPlayer.addEventListener('play', () => triggerTrackNotification(videoPlayer));
-                }
-
             } catch (error) {
-                console.error("Could not link media listeners due to iframe constraints:", error);
+                console.error("Could not inject bridge hook into iframe context:", error);
             }
         });
     </script>

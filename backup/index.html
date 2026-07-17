@@ -3,228 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Operat Minimal Streamer</title>
-    <!-- WebTorrent for browser-based magnet streaming -->
-    <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+    <title>Media Player MiniApp Bridge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --bg-color: #0b0c10;
-            --surface-color: #1f2833;
-            --accent-color: #45f3ff;
-            --text-color: #c5c6c7;
-        }
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #0f111a;
+            color: #e1e4ed;
             margin: 0;
-            padding: 15px;
+            padding: 0;
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            align-items: center;
-        }
-        .container {
-            width: 100%;
-            max-width: 650px;
-        }
-        h2 { text-align: center; color: #fff; margin-bottom: 15px; }
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        input {
-            flex: 1;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid var(--surface-color);
-            background: #151a22;
-            color: #fff;
-            font-size: 16px;
-        }
-        button {
-            padding: 12px 20px;
-            border-radius: 6px;
-            border: none;
-            background-color: var(--accent-color);
-            color: #000;
-            font-weight: bold;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        #status {
-            font-size: 14px;
-            color: #888;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        .player-window {
-            width: 100%;
-            aspect-ratio: 16/9;
-            background: #000;
-            border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            margin-bottom: 20px;
-            position: relative;
         }
-        video, iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-        .history-panel {
-            background: var(--surface-color);
-            padding: 15px;
-            border-radius: 8px;
-        }
-        .history-title { color: #fff; font-size: 16px; margin-top: 0; margin-bottom: 10px; }
-        .history-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; }
-        .history-item {
-            padding: 8px;
-            border-bottom: 1px solid #2b3543;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-        }
-        .history-item:hover { color: var(--accent-color); }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h2>Operat Video Deck</h2>
-        
-        <div class="search-box">
-            <input type="text" id="query" placeholder="e.g., Drunken Master 1978" onkeypress="if(event.key==='Enter') searchMovie()">
-            <button onclick="searchMovie()">Stream</button>
+    <!-- Top Navigation Bar for MiniApp Context -->
+    <div class="bg-[#161925] border-b border-[#232838] px-4 py-3 flex items-center justify-between shadow-md">
+        <div class="flex items-center space-x-2">
+            <span class="text-xl">📦</span>
+            <div>
+                <h1 class="text-sm font-bold text-white leading-tight">Media Hub Extension</h1>
+                <p class="text-[11px] text-gray-400 font-mono">Running inside Workspace Overlay</p>
+            </div>
         </div>
-
-        <div id="status">Ready. Enter an old action title.</div>
-
-        <div class="player-window" id="playerZone">
-            <!-- Dynamic Video element or embed Frame mounts here -->
-            <div style="display: flex; height:100%; align-items:center; justify-content:center; color:#444;">No Media Loaded</div>
-        </div>
-
-        <div class="history-panel">
-            <p class="history-title">Recent Watches</p>
-            <ul class="history-list" id="historyList"></ul>
+        <div class="flex items-center space-x-2">
+            <!-- Native Status Refresher -->
+            <button onclick="reloadPlayer()" class="text-xs bg-[#2c3143] hover:bg-[#3886ff] hover:text-white text-[#a2aab8] font-medium py-1.5 px-3 rounded transition-colors duration-150">
+                🔄 Hard Reset
+            </button>
         </div>
     </div>
 
+    <!-- Embedded Modular Player Frame -->
+    <div class="flex-1 w-full h-full bg-black relative">
+        <iframe 
+            id="player-frame" 
+            src="/player/" 
+            class="w-full h-full border-none absolute top-0 left-0" 
+            allow="autoplay; encrypted-media">
+        </iframe>
+    </div>
+
     <script>
-        // Initialize WebTorrent Client Engine
-        const wtClient = new WebTorrent();
-        let activeTorrent = null;
-
-        // Auto-load history on launch
-        document.addEventListener("DOMContentLoaded", renderHistory);
-
-        async function searchMovie(forcedTitle = null) {
-            const searchInput = document.getElementById('query');
-            const searchTerm = forcedTitle || searchInput.value.trim();
-            if (!searchTerm) return;
-
-            const status = document.getElementById('status');
-            const playerZone = document.getElementById('playerZone');
-            
-            status.innerText = "Searching open indices...";
-            
-            // Gracefully stop active torrent loops before changing streams
-            if (activeTorrent) {
-                wtClient.remove(activeTorrent.infoHash);
-                activeTorrent = null;
+        // Simple bridge function to reload the inner Flask workspace blueprint frame if it runs into execution timeouts
+        function reloadPlayer() {
+            const frame = document.getElementById('player-frame');
+            if (frame) {
+                frame.src = frame.src;
+                console.log("[MINIAPP BRIDGE]: Refreshed underlying module layer.");
             }
-
-            try {
-                // Fetch directly from open metadata directory
-                const res = await fetch(`https://yts.mx/api/v2/list_movies.json?query_term=${encodeURIComponent(searchTerm)}`);
-                const json = await res.json();
-
-                if (!json.data || json.data.movie_count === 0) {
-                    status.innerText = "No lightweight torrent sources found. Trying direct web player stream...";
-                    fallbackToEmbed(searchTerm);
-                    return;
-                }
-
-                const movie = json.data.movies[0];
-                
-                // Select the smallest file payload available (Optimizing for low bandwidth under 200MB-600MB)
-                const smallPayload = movie.torrents.reduce((prev, curr) => prev.size_bytes < curr.size_bytes ? prev : curr);
-                
-                status.innerText = `Sourcing: ${movie.title_long} (${smallPayload.size})`;
-                
-                // Build Tracker Announcement String
-                const magnet = `magnet:?xt=urn:btih:${smallPayload.hash}&dn=${encodeURIComponent(movie.title)}&tr=udp://open.demonii.com:1337/announce&tr=udp://tracker.openittorrent.com:80/announce&tr=udp://tracker.coppersurfer.tk:6969`;
-
-                // Render Video Layer immediately
-                playerZone.innerHTML = `<video id="streamer" controls autoplay></video>`;
-                
-                wtClient.add(magnet, function (torrent) {
-                    activeTorrent = torrent;
-                    // Filter for specific video containers
-                    const targetFile = torrent.files.find(f => f.name.endsWith('.mp4') || f.name.endsWith('.mkv'));
-                    
-                    if (targetFile) {
-                        status.innerText = "Connecting to WebRTC node blocks...";
-                        targetFile.renderTo('video#streamer', { autoplay: true }, function(err) {
-                            if (!err) {
-                                status.innerText = `Streaming: ${movie.title_long}`;
-                                logHistory(movie.title_long);
-                            } else {
-                                status.innerText = "Codec buffer error. Dropping back to direct embed player...";
-                                fallbackToEmbed(movie.title);
-                            }
-                        });
-                    }
-                });
-
-                // Set a timeout check—if WebTorrent fails to stream due to zero WebRTC seeders within 8 seconds, trigger fallback
-                setTimeout(() => {
-                    const videoEl = document.getElementById('streamer');
-                    if (videoEl && videoEl.readyState === 0 && activeTorrent) {
-                        status.innerText = "Insufficient browser peers. Initializing cloud mirror streaming...";
-                        fallbackToEmbed(movie.title);
-                    }
-                }, 8000);
-
-            } catch (err) {
-                status.innerText = "Index request failed. Using alternate cloud player path...";
-                fallbackToEmbed(searchTerm);
-            }
-        }
-
-        function fallbackToEmbed(title) {
-            // Converts title spaces to hyphens for clean parsing
-            const slug = title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-');
-            const playerZone = document.getElementById('playerZone');
-            
-            // Mounts the embed pipeline using an alternate direct streaming stream proxy (No Torrents Required)
-            playerZone.innerHTML = `<iframe src="https://vidlink.pro/movie/${encodeURIComponent(slug)}" allowfullscreen></iframe>`;
-            logHistory(title);
-        }
-
-        function logHistory(title) {
-            let list = JSON.parse(localStorage.getItem('operat_history')) || [];
-            if (!list.includes(title)) {
-                list.unshift(title); // Push to the top of the stack
-                if (list.length > 10) list.pop(); // Keep index stack minimal
-                localStorage.setItem('operat_history', JSON.stringify(list));
-                renderHistory();
-            }
-        }
-
-        function renderHistory() {
-            const listEl = document.getElementById('historyList');
-            const list = JSON.parse(localStorage.getItem('operat_history')) || [];
-            listEl.innerHTML = list.map(item => `
-                <li class="history-item" onclick="searchMovie('${item.replace(/'/g, "\\'")}')">
-                    <span>${item}</span>
-                    <span style="color:var(--accent-color); font-size:12px;">▶ Play</span>
-                </li>
-            `).join('');
         }
     </script>
 </body>

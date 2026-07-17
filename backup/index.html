@@ -48,7 +48,7 @@
     </div>
 
     <script>
-        // Simple bridge function to reload the inner Flask workspace blueprint frame if it runs into execution timeouts
+        // Simple bridge function to reload the inner Flask workspace blueprint frame
         function reloadPlayer() {
             const frame = document.getElementById('player-frame');
             if (frame) {
@@ -66,26 +66,49 @@
                 const audioPlayer = innerDoc.getElementById('audio-player');
                 const videoPlayer = innerDoc.getElementById('video-player');
 
-                // Helper function to extract the track name and fire the notification endpoint
+                // Strategy: Find the clean text name being displayed in the player UI
+                const getCleanTrackName = () => {
+                    // 1. Check for standard title containers or headers in your player UI
+                    const uiTitle = innerDoc.querySelector('h2') || 
+                                    innerDoc.querySelector('.track-title') || 
+                                    innerDoc.getElementById('current-track-name');
+                    
+                    if (uiTitle && uiTitle.innerText.trim()) {
+                        return uiTitle.innerText.trim();
+                    }
+
+                    // 2. Look for the actively selected list row (e.g., matching a background color or active class)
+                    const activeRow = innerDoc.querySelector('.bg-blue-600') || 
+                                      innerDoc.querySelector('.active-track') ||
+                                      innerDoc.querySelector('[class*="bg-opacity"]'); // Tailored for highlights
+                    if (activeRow) {
+                        return activeRow.innerText.trim();
+                    }
+
+                    return null;
+                };
+
+                // Helper function to extract track name and fire notification endpoint
                 const triggerTrackNotification = (playerElement) => {
-                    if (playerElement && playerElement.src) {
-                        // Extract and decode the uri query parameter from the /player/stream?uri=... URL
+                    let trackName = getCleanTrackName();
+
+                    // Fallback: If the DOM scraper couldn't find a text element, parse the URI string
+                    if (!trackName && playerElement && playerElement.src) {
                         const urlParams = new URLSearchParams(playerElement.src.split('?')[1]);
                         const rawUri = urlParams.get('uri');
                         
                         if (rawUri) {
-                            // Clean up the native URI string to parse a readable filename
-                            let trackName = decodeURIComponent(rawUri);
-                            
-                            // If it contains a full internal system path, split it to get just the filename
+                            trackName = decodeURIComponent(rawUri);
                             if (trackName.includes('/')) {
                                 trackName = trackName.substring(trackName.lastIndexOf('/') + 1);
                             }
-
-                            // Fire the notification API request straight from the index.html context
-                            fetch(`/api/hardware/notification?title=Now+Playing&msg=${encodeURIComponent(trackName)}`)
-                                .catch(err => console.error("MiniApp bridge failed to fire notification:", err));
                         }
+                    }
+
+                    // Fire the notification API request with the parsed clean name
+                    if (trackName) {
+                        fetch(`/api/hardware/notification?title=Now+Playing&msg=${encodeURIComponent(trackName)}`)
+                            .catch(err => console.error("MiniApp bridge failed to fire notification:", err));
                     }
                 };
 
@@ -98,7 +121,7 @@
                 }
 
             } catch (error) {
-                console.error("Could not link media listeners due to iframe security context or loading constraints:", error);
+                console.error("Could not link media listeners due to iframe constraints:", error);
             }
         });
     </script>

@@ -1,55 +1,83 @@
-import os
-import platform
-import sys
+import urllib.request
+import urllib.parse
+from html.parser import HTMLParser
 
-def get_sys_info(params=None):
-    """
-    Returns general operating system and environment diagnostics.
-    Triggered via GET/POST to /runner/api/<app_name>/get_sys_info
-    """
-    return {
-        "platform": platform.platform(),
-        "python_version": sys.version.split()[0],
-        "processor": platform.processor() or "Mobile / ARM Architecture",
-        "current_dir": os.getcwd()
-    }
+class JumiaHTMLParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.products = []
+        self.in_card = False
+        self.in_name = False
+        self.in_price = False
+        self.current_name = ""
+        self.current_price = ""
 
-def get_storage_stats(params=None):
+    def handle_starttag(self, tag, attrs):
+        attr_dict = dict(attrs)
+        tag_class = attr_dict.get('class', '')
+
+        # Detect product card container
+        if tag == 'article' and 'prd' in tag_class:
+            self.in_card = True
+            self.current_name = ""
+            self.current_price = ""
+
+        if self.in_card:
+            if tag in ['div', 'h3'] and 'name' in tag_class:
+                self.in_name = True
+            elif tag == 'div' and 'prc' in tag_class:
+                self.in_price = True
+
+    def handle_endtag(self, tag):
+        if tag in ['div', 'h3']:
+            self.in_name = False
+            self.in_price = False
+
+        if tag == 'article' and self.in_card:
+            if self.current_name and self.current_price:
+                self.products.append({
+                    "name": self.current_name.strip(),
+                    "price": self.current_price.strip()
+                })
+            self.in_card = False
+
+    def handle_data(self, data):
+        if self.in_name:
+            self.current_name += data
+        elif self.in_price:
+            self.current_price += data
+
+
+def scrape_jumia(params=None):
     """
-    Calculates storage usage for the main user-facing storage (/storage/emulated/0).
-    Triggered via GET/POST to /runner/api/<app_name>/get_storage_stats
+    Queries Jumia Kenya using pure Python standard libraries (urllib + html.parser).
+    No pip dependencies required!
     """
+    search_query = params.get("query", "phones") if params else "phones"
+    encoded_query = urllib.parse.quote(search_query)
+    url = f"https://www.jumia.co.ke/catalog/?q={encoded_query}"
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+    )
+
     try:
-        # Check main shared storage path instead of isolated app working directory "."
-        storage_path = "/storage/emulated/0" if os.path.exists("/storage/emulated/0") else "."
-        
-        stats = os.statvfs(storage_path)
-        free_bytes = stats.f_bavail * stats.f_frsize
-        total_bytes = stats.f_blocks * stats.f_frsize
-        used_bytes = total_bytes - free_bytes
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html_data = response.read().decode('utf-8', errors='ignore')
+
+        parser = JumiaHTMLParser()
+        parser.feed(html_data)
 
         return {
-            "total_gb": round(total_bytes / (1024**3), 2),
-            "used_gb": round(used_bytes / (1024**3), 2),
-            "free_gb": round(free_bytes / (1024**3), 2),
-            "used_percent": round((used_bytes / total_bytes) * 100, 1)
+            "success": True,
+            "query": search_query,
+            "total_found": len(parser.products),
+            "products": parser.products[:8] # Return top 8
         }
-    except Exception as e:
-        return {"error": f"Storage query unavailable on platform: {str(e)}"}
 
-def calculate_hash(params=None):
-    """
-    Demonstrates processing custom input data sent from index.html.
-    Triggered via POST to /runner/api/<app_name>/calculate_hash
-    """
-    import hashlib
-    
-    text = params.get("input_text", "") if params else ""
-    if not text:
-        return {"error": "No text provided to hash."}
-        
-    hashed_value = hashlib.sha256(text.encode('utf-8')).hexdigest()
-    return {
-        "original": text,
-        "sha256": hashed_value
-    }
+    except Exception as e:
+        return {"error": f"Scrape failed: {str(e)}"}

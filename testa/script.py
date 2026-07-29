@@ -5,7 +5,7 @@ import sys
 def get_sys_info(params=None):
     """
     Returns general operating system and environment diagnostics.
-    Triggered via GET/POST to /runner/api/sys_diag/get_sys_info
+    Triggered via GET/POST to /runner/api/<app_name>/get_sys_info
     """
     return {
         "platform": platform.platform(),
@@ -16,12 +16,14 @@ def get_sys_info(params=None):
 
 def get_storage_stats(params=None):
     """
-    Calculates storage usage inside the current execution path.
-    Triggered via GET/POST to /runner/api/sys_diag/get_storage_stats
+    Calculates storage usage for the main user-facing storage (/storage/emulated/0).
+    Triggered via GET/POST to /runner/api/<app_name>/get_storage_stats
     """
     try:
-        # Check storage space on the internal volume
-        stats = os.statvfs(".")
+        # Check main shared storage path instead of isolated app working directory "."
+        storage_path = "/storage/emulated/0" if os.path.exists("/storage/emulated/0") else "."
+        
+        stats = os.statvfs(storage_path)
         free_bytes = stats.f_bavail * stats.f_frsize
         total_bytes = stats.f_blocks * stats.f_frsize
         used_bytes = total_bytes - free_bytes
@@ -33,12 +35,12 @@ def get_storage_stats(params=None):
             "used_percent": round((used_bytes / total_bytes) * 100, 1)
         }
     except Exception as e:
-        return {"error": f"Storage query unavaliable on platform: {str(e)}"}
+        return {"error": f"Storage query unavailable on platform: {str(e)}"}
 
 def calculate_hash(params=None):
     """
     Demonstrates processing custom input data sent from index.html.
-    Triggered via POST to /runner/api/sys_diag/calculate_hash
+    Triggered via POST to /runner/api/<app_name>/calculate_hash
     """
     import hashlib
     

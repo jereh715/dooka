@@ -66,8 +66,10 @@
     </div>
 
     <script>
-        // Adjust 'sys_diag' if your cloned app folder has a different directory name
-        const APP_NAME = "sys_diag";
+        // Automatically extracts the current app folder name from URL path
+        // Example: "/mini_apps/testa/index.html" -> APP_NAME becomes "testa"
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        const APP_NAME = pathSegments.length >= 2 ? pathSegments[1] : "testa";
 
         async function fetchSysInfo() {
             const container = document.getElementById('sys-info-content');

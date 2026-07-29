@@ -57,8 +57,8 @@
 
     <!-- JavaScript Bridge Connection -->
     <script>
-        // Extract current app identifier from path or fallback to default
-        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        // FIXED: Filter out 'index.html' so APP_NAME targets the actual parent folder (e.g., 'testa')
+        const pathSegments = window.location.pathname.split('/').filter(p => p && p !== 'index.html');
         const APP_NAME = pathSegments[pathSegments.length - 1] || 'sys_diag';
 
         function setQuery(term) {
@@ -80,7 +80,7 @@
             container.innerHTML = `
                 <div class="p-4 bg-gray-900/50 border border-gray-800 rounded-lg text-center space-y-2">
                     <div class="inline-block animate-spin rounded-full h-5 w-5 border-2 border-orange-500 border-t-transparent"></div>
-                    <p class="text-xs text-gray-400">Sending HTTP request to Jumia Kenya for "<span class="text-white">${query}</span>"...</p>
+                    <p class="text-xs text-gray-400">Sending HTTP request to Jumia Kenya for "<span class="text-white">${escapeHtml(query)}</span>"...</p>
                 </div>
             `;
 

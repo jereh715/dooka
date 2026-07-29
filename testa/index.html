@@ -3,145 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Diagnostics</title>
+    <title>Jumia Price Tracker</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #0d1117; color: #c9d1d9; font-family: system-ui, sans-serif; }
-    </style>
 </head>
-<body class="p-4 flex flex-col min-h-screen justify-between">
+<body class="bg-gray-950 text-gray-100 min-h-screen p-4 font-sans">
 
-    <div class="space-y-4">
-        <!-- Header -->
-        <div class="border-b border-gray-800 pb-3">
-            <h1 class="text-xl font-bold text-white flex items-center gap-2">
-                ⚡ Operat Diagnostic Tool
+    <!-- App Header -->
+    <div class="max-w-md mx-auto space-y-4">
+        <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+            <h1 class="text-xl font-bold text-orange-500 flex items-center gap-2">
+                🛍️ Jumia Scraper
             </h1>
-            <p class="text-xs text-gray-500">Full-Stack Python + Web Integration</p>
+            <span class="text-xs bg-orange-950 text-orange-400 border border-orange-800 px-2 py-0.5 rounded-full font-mono">
+                Pure Standard Lib
+            </span>
         </div>
 
-        <!-- System Information Card -->
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <div class="flex justify-between items-center mb-2">
-                <h2 class="font-semibold text-sm text-blue-400">🖥️ Host Environment</h2>
-                <button onclick="fetchSysInfo()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded transition">
-                    Refresh
-                </button>
-            </div>
-            <div id="sys-info-content" class="text-xs space-y-1 text-gray-300 font-mono">
-                <p class="text-gray-600">Loading system specs...</p>
-            </div>
+        <!-- Search Input Form -->
+        <div class="flex gap-2">
+            <input 
+                type="text" 
+                id="search-input" 
+                placeholder="Search phones, laptops..." 
+                value="phones"
+                class="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+                onkeypress="if(event.key === 'Enter') triggerScrape()"
+            />
+            <button 
+                onclick="triggerScrape()" 
+                id="search-btn"
+                class="bg-orange-600 hover:bg-orange-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-1">
+                Search
+            </button>
         </div>
 
-        <!-- Storage Card -->
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <div class="flex justify-between items-center mb-2">
-                <h2 class="font-semibold text-sm text-green-400">💾 Storage Metrics</h2>
-                <button onclick="fetchStorageStats()" class="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded transition">
-                    Scan
-                </button>
-            </div>
-            <div id="storage-content" class="text-xs space-y-1 text-gray-300 font-mono">
-                <p class="text-gray-600">Click Scan to query disk...</p>
-            </div>
+        <!-- Quick Search Tags -->
+        <div class="flex gap-2 text-xs overflow-x-auto pb-1">
+            <span class="text-gray-500 py-1">Quick:</span>
+            <button onclick="setQuery('phones')" class="bg-gray-900 border border-gray-800 px-2 py-1 rounded text-gray-300 hover:border-gray-700">Phones</button>
+            <button onclick="setQuery('laptops')" class="bg-gray-900 border border-gray-800 px-2 py-1 rounded text-gray-300 hover:border-gray-700">Laptops</button>
+            <button onclick="setQuery('solar')" class="bg-gray-900 border border-gray-800 px-2 py-1 rounded text-gray-300 hover:border-gray-700">Solar</button>
+            <button onclick="setQuery('tv')" class="bg-gray-900 border border-gray-800 px-2 py-1 rounded text-gray-300 hover:border-gray-700">TVs</button>
         </div>
 
-        <!-- Interactive Python SHA256 Form -->
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <h2 class="font-semibold text-sm text-purple-400 mb-2">🔐 Backend Hasher</h2>
-            <div class="flex gap-2 mb-2">
-                <input id="hash-input" type="text" placeholder="Enter string..." 
-                    class="flex-1 bg-gray-950 border border-gray-800 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
-                <button onclick="runHash()" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs transition">
-                    Hash
-                </button>
+        <!-- Status & Results Container -->
+        <div id="results-container" class="space-y-2 pt-2">
+            <div class="text-center py-8 text-gray-500 text-sm">
+                Enter a product name above to scrape live deals from Jumia Kenya.
             </div>
-            <div id="hash-result" class="text-xs text-gray-400 font-mono break-all hidden"></div>
         </div>
     </div>
 
-    <!-- Footer -->
-    <div class="text-center text-[10px] text-gray-600 mt-6 border-t border-gray-900 pt-2">
-        Powered by <span class="text-gray-400 font-semibold">runner.py</span>
-    </div>
-
+    <!-- JavaScript Bridge Connection -->
     <script>
-        // Automatically extracts the current app folder name from URL path
-        // Example: "/mini_apps/testa/index.html" -> APP_NAME becomes "testa"
+        // Extract current app identifier from path or fallback to default
         const pathSegments = window.location.pathname.split('/').filter(Boolean);
-        const APP_NAME = pathSegments.length >= 2 ? pathSegments[1] : "testa";
+        const APP_NAME = pathSegments[pathSegments.length - 1] || 'sys_diag';
 
-        async function fetchSysInfo() {
-            const container = document.getElementById('sys-info-content');
-            container.innerHTML = '<p class="text-gray-500">Querying backend...</p>';
-            try {
-                const response = await fetch(`/runner/api/${APP_NAME}/get_sys_info`);
-                const res = await response.json();
-                
-                if (res.success) {
-                    const data = res.data;
-                    container.innerHTML = `
-                        <p><span class="text-gray-500">Platform:</span> ${data.platform}</p>
-                        <p><span class="text-gray-500">Python:</span> ${data.python_version}</p>
-                        <p><span class="text-gray-500">CPU:</span> ${data.processor}</p>
-                    `;
-                } else {
-                    container.innerHTML = `<p class="text-red-400">${res.error}</p>`;
-                }
-            } catch (err) {
-                container.innerHTML = `<p class="text-red-400">Failed to connect to runner API.</p>`;
-            }
+        function setQuery(term) {
+            document.getElementById('search-input').value = term;
+            triggerScrape();
         }
 
-        async function fetchStorageStats() {
-            const container = document.getElementById('storage-content');
-            container.innerHTML = '<p class="text-gray-500">Analyzing volume...</p>';
-            try {
-                const response = await fetch(`/runner/api/${APP_NAME}/get_storage_stats`);
-                const res = await response.json();
+        async function triggerScrape() {
+            const queryInput = document.getElementById('search-input');
+            const searchBtn = document.getElementById('search-btn');
+            const container = document.getElementById('results-container');
+            const query = queryInput.value.trim();
 
-                if (res.success && !res.data.error) {
-                    const d = res.data;
-                    container.innerHTML = `
-                        <p><span class="text-gray-500">Used:</span> ${d.used_gb} GB / ${d.total_gb} GB (${d.used_percent}%)</p>
-                        <p><span class="text-gray-500">Free:</span> ${d.free_gb} GB</p>
-                    `;
-                } else {
-                    container.innerHTML = `<p class="text-yellow-500">${res.data.error || res.error}</p>`;
-                }
-            } catch (err) {
-                container.innerHTML = `<p class="text-red-400">Failed to reach storage endpoint.</p>`;
-            }
-        }
+            if (!query) return;
 
-        async function runHash() {
-            const inputVal = document.getElementById('hash-input').value;
-            const resultBox = document.getElementById('hash-result');
-
-            if (!inputVal) return;
+            // Loading state UI
+            searchBtn.disabled = true;
+            searchBtn.classList.add('opacity-50');
+            container.innerHTML = `
+                <div class="p-4 bg-gray-900/50 border border-gray-800 rounded-lg text-center space-y-2">
+                    <div class="inline-block animate-spin rounded-full h-5 w-5 border-2 border-orange-500 border-t-transparent"></div>
+                    <p class="text-xs text-gray-400">Sending HTTP request to Jumia Kenya for "<span class="text-white">${query}</span>"...</p>
+                </div>
+            `;
 
             try {
-                const response = await fetch(`/runner/api/${APP_NAME}/calculate_hash`, {
+                // Dispatch POST request to runner -> script.py -> scrape_jumia
+                const response = await fetch(`/runner/api/${APP_NAME}/scrape_jumia`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ input_text: inputVal })
+                    body: JSON.stringify({ query: query })
                 });
-                const res = await response.json();
 
-                if (res.success && res.data.sha256) {
-                    resultBox.classList.remove('hidden');
-                    resultBox.innerHTML = `
-                        <span class="text-purple-400">SHA256:</span><br>
-                        ${res.data.sha256}
+                const result = await response.json();
+                
+                // Unpack endpoint response structure
+                const payload = result.data || result;
+
+                if (payload.success && payload.products && payload.products.length > 0) {
+                    container.innerHTML = `
+                        <div class="flex justify-between items-center px-1 pb-1 text-xs text-gray-400">
+                            <span>Found ${payload.total_found} items</span>
+                            <span class="font-mono text-orange-400">Jumia Kenya</span>
+                        </div>
+                        <div class="space-y-2">
+                            ${payload.products.map(item => `
+                                <div class="p-3 bg-gray-900 border border-gray-800 rounded-lg flex justify-between items-start gap-3 hover:border-gray-700 transition-colors">
+                                    <span class="text-sm text-gray-200 font-medium leading-snug flex-1">${escapeHtml(item.name)}</span>
+                                    <span class="text-sm font-bold text-green-400 whitespace-nowrap bg-green-950/40 px-2 py-0.5 rounded border border-green-900/50">
+                                        ${escapeHtml(item.price)}
+                                    </span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else if (payload.products && payload.products.length === 0) {
+                    container.innerHTML = `
+                        <div class="p-4 bg-gray-900 border border-gray-800 rounded-lg text-center text-sm text-gray-400">
+                            No products found matching "<span class="text-white">${escapeHtml(query)}</span>".
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="p-4 bg-red-950/30 border border-red-900/50 rounded-lg text-red-400 text-xs font-mono">
+                            ⚠️ Error: ${escapeHtml(payload.error || 'Unknown parsing failure')}
+                        </div>
                     `;
                 }
             } catch (err) {
-                console.error("Hashing failed:", err);
+                container.innerHTML = `
+                    <div class="p-4 bg-red-950/30 border border-red-900/50 rounded-lg text-red-400 text-xs font-mono">
+                        ⚠️ Network Error: Unable to reach python runner. (${escapeHtml(err.message)})
+                    </div>
+                `;
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.classList.remove('opacity-50');
             }
         }
 
-        // Auto-fetch environment information on app startup
-        window.onload = fetchSysInfo;
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, m => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[m]);
+        }
     </script>
 </body>
 </html>

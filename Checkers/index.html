@@ -373,7 +373,7 @@
             boardState[jumpR][jumpC] = EMPTY;
         }
 
-        // Kinging
+        // Kinging Check
         let promoted = false;
         if (boardState[toR][toC] === RED && toR === 0) {
             boardState[toR][toC] = RED_KING;
@@ -383,7 +383,7 @@
             promoted = true;
         }
 
-        // Multi-jump checking
+        // Multi-jump checking (Ends turn if promoted on landing)
         if (isJump && !promoted) {
             const furtherJumps = getMovesForPiece(boardState, toR, toC).filter(m => m.isJump);
             if (furtherJumps.length > 0) {
@@ -452,7 +452,7 @@
             }
         }
 
-        // Standard step moves (only if no mandatory jumps are required globally or if generating for specific non-forced context)
+        // Standard step moves
         if (moves.length === 0) {
             for (let [dr, dc] of directions) {
                 const nextR = r + dr;
@@ -484,7 +484,7 @@
 
                     if (jumps.length > 0) {
                         if (!hasJumps) {
-                            moves = []; // Discard simple moves once a jump is found (forced capture)
+                            moves = []; // Discard simple moves once a jump is found
                             hasJumps = true;
                         }
                         moves.push(...jumps);
@@ -535,7 +535,7 @@
     // --- AI MINIMAX ENGINE ---
 
     function makeAIMove() {
-        const bestMove = getBestMoveMinimax(boardState, 4); // Depth 4 gives smart & fast AI
+        const bestMove = getBestMoveMinimax(boardState, 4);
         if (bestMove) {
             executeMove(bestMove);
         } else {
@@ -564,7 +564,6 @@
         }
 
         if (bestMoves.length === 0) return null;
-        // Pick a random move among the equal best choices to vary gameplay
         return bestMoves[Math.floor(Math.random() * bestMoves.length)];
     }
 
@@ -576,7 +575,7 @@
         if (isMaximizing) {
             let maxEval = -Infinity;
             const moves = getAllPossibleMoves(board, BLACK);
-            if (moves.length === 0) return -1000; // Black loses
+            if (moves.length === 0) return -1000;
 
             for (let move of moves) {
                 const nextBoard = cloneBoard(board);
@@ -590,7 +589,7 @@
         } else {
             let minEval = Infinity;
             const moves = getAllPossibleMoves(board, RED);
-            if (moves.length === 0) return 1000; // Red loses
+            if (moves.length === 0) return 1000;
 
             for (let move of moves) {
                 const nextBoard = cloneBoard(board);
@@ -627,13 +626,10 @@
                 if (!piece) continue;
 
                 let pieceValue = 10;
-                if (piece.endsWith('K')) pieceValue = 18; // Kings are worth significantly more
+                if (piece.endsWith('K')) pieceValue = 18;
 
-                // Positional bonuses
                 let positionBonus = 0;
-                // Prefer center control
                 if (c >= 2 && c <= 5 && r >= 2 && r <= 5) positionBonus += 2;
-                // Encourage advancing standard pieces
                 if (piece === BLACK) positionBonus += (r * 1);
                 if (piece === RED) positionBonus += ((7 - r) * 1);
 

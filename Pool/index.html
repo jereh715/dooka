@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -269,64 +268,58 @@ function sfxWin(){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>pluck(f,0.3,
 
 /* ---------------------------- THREE.JS SETUP ----------------------------- */
 
-const isMobile = /Android|iPhone|iPad|iPod|Mobi|webOS|BlackBerry|IEMobile/i.test(navigator.userAgent)
-  || (window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
-const MAX_PIXEL_RATIO = isMobile ? 1.5 : 2;
-const BALL_SEG = isMobile ? 16 : 26;         // sphere subdivisions per ball
-const TEX_SIZE = isMobile ? {w:256,h:128} : {w:512,h:256};
-const SHADOW_MAP_SIZE = isMobile ? 512 : 1024;
-
 const container = $('app');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f0d);
 scene.fog = new THREE.Fog(0x0b0f0d, 6, 14);
 
-// Orthographic (true isometric-style) camera — no perspective convergence,
-// keeps the whole table readable at a glance and is a bit cheaper to project too.
-const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 40);
+const camera = new THREE.PerspectiveCamera(52, window.innerWidth/window.innerHeight, 0.05, 60);
 
-const renderer = new THREE.WebGLRenderer({antialias: !isMobile, powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, MAX_PIXEL_RATIO));
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = isMobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
-renderer.shadowMap.autoUpdate = false; // only static rails/frame cast real shadows — refreshed manually once
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 container.appendChild(renderer.domElement);
 
-/* Lighting — kept to a minimal set of lights since every extra light adds a
-   per-fragment cost that adds up fast on mobile GPUs. */
-const ambient = new THREE.AmbientLight(0x8890a0, 0.65);
+/* Lighting */
+const ambient = new THREE.AmbientLight(0x8890a0, 0.55);
 scene.add(ambient);
 
-const hemi = new THREE.HemisphereLight(0xbfd4ff, 0x1a1410, 0.5);
+const hemi = new THREE.HemisphereLight(0xbfd4ff, 0x1a1410, 0.45);
 scene.add(hemi);
 
-const keyLight = new THREE.DirectionalLight(0xfff2d8, 0.95);
+const keyLight = new THREE.DirectionalLight(0xfff2d8, 0.9);
 keyLight.position.set(1.6, 4.2, 1.2);
 keyLight.castShadow = true;
-keyLight.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+keyLight.shadow.mapSize.set(1024,1024);
 keyLight.shadow.camera.left = -3; keyLight.shadow.camera.right = 3;
 keyLight.shadow.camera.top = 3.5; keyLight.shadow.camera.bottom = -3.5;
 keyLight.shadow.camera.near = 1; keyLight.shadow.camera.far = 9;
 keyLight.shadow.bias = -0.0015;
 scene.add(keyLight);
 
-/* Overhead lamp visuals — purely decorative meshes, no extra scene lights */
+const rimLight = new THREE.PointLight(0xffe4b0, 0.5, 8);
+rimLight.position.set(-1.6, 1.6, -2.2);
+scene.add(rimLight);
+
+/* Overhead lamp visuals (two hanging lamp fixtures) */
 function makeLamp(x,z){
   const g = new THREE.Group();
   const shade = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.34, 0.42, 0.16, isMobile?10:20, 1, true),
-    new THREE.MeshLambertMaterial({color:0x1a1410, side:THREE.DoubleSide})
+    new THREE.CylinderGeometry(0.34, 0.42, 0.16, 24, 1, true),
+    new THREE.MeshStandardMaterial({color:0x1a1410, side:THREE.DoubleSide, roughness:0.6, metalness:0.3})
   );
   shade.position.set(x, 2.55, z);
   g.add(shade);
-  const bulb = new THREE.Mesh(
-    new THREE.SphereGeometry(0.05, isMobile?8:12, isMobile?6:12),
-    new THREE.MeshBasicMaterial({color:0xfff3d0})
-  );
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05,12,12), new THREE.MeshStandardMaterial({color:0xfff3d0, emissive:0xffedb0, emissiveIntensity:1.4}));
   bulb.position.set(x,2.46,z);
   g.add(bulb);
+  const pl = new THREE.PointLight(0xffdf9c, 0.55, 5.2, 2);
+  pl.position.set(x,2.4,z);
+  pl.castShadow = false;
+  g.add(pl);
   return g;
 }
 scene.add(makeLamp(0,-1.05));
@@ -339,32 +332,26 @@ const tableGroup = new THREE.Group();
 scene.add(tableGroup);
 
 /* Felt */
-const feltMat = new THREE.MeshLambertMaterial({color:0x0f5c38});
-const feltGeo = new THREE.PlaneGeometry(TABLE_W, TABLE_L, isMobile?1:8, isMobile?1:16);
+const feltMat = new THREE.MeshStandardMaterial({color:0x0f5c38, roughness:0.95, metalness:0.0});
+const feltGeo = new THREE.PlaneGeometry(TABLE_W, TABLE_L, 20, 40);
 const felt = new THREE.Mesh(feltGeo, feltMat);
 felt.rotation.x = -Math.PI/2;
 felt.position.y = TABLE_Y;
 felt.receiveShadow = true;
 tableGroup.add(felt);
 
-/* subtle felt diamonds markers, sitting just above the cushion tops so they
-   don't z-fight with (or get buried under) the rail geometry */
-const diamondMat = new THREE.MeshLambertMaterial({color:0xe8dcb8});
-const diamondY = TABLE_Y + CUSHION_H + 0.004;
+/* subtle felt diamonds markers on rail (visual flair) */
 function addDiamond(x,z){
-  const d = new THREE.Mesh(new THREE.CircleGeometry(0.02,4), diamondMat);
+  const d = new THREE.Mesh(new THREE.CircleGeometry(0.02,4), new THREE.MeshStandardMaterial({color:0xe8dcb8, roughness:0.5}));
   d.rotation.x = -Math.PI/2;
-  d.position.set(x, diamondY, z);
+  d.position.set(x, TABLE_Y+0.001, z);
   tableGroup.add(d);
 }
 for(let i=-3;i<=3;i++){ if(i===0) continue; addDiamond(i*TABLE_W/7*1.05, -TABLE_L/2 - RAIL_W*0.55); addDiamond(i*TABLE_W/7*1.05, TABLE_L/2 + RAIL_W*0.55); }
 for(let i=-6;i<=6;i++){ if(i===0) continue; addDiamond(TABLE_W/2 + RAIL_W*0.55, i*TABLE_L/14*1.05); addDiamond(-TABLE_W/2 - RAIL_W*0.55, i*TABLE_L/14*1.05); }
 
-/* Cushions (4 rails made of boxes with pocket gaps).
-   Sunk very slightly below the felt's top so their bottom face never sits
-   exactly coplanar with the felt plane — coplanar meshes are what caused the
-   green/brown flicker on mobile GPUs with lower depth-buffer precision. */
-const cushionMat = new THREE.MeshLambertMaterial({color:0x0c4429});
+/* Cushions (4 rails made of boxes with pocket gaps) */
+const cushionMat = new THREE.MeshStandardMaterial({color:0x0c4429, roughness:0.85});
 function makeCushionBox(w,h,d,x,y,z){
   const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), cushionMat);
   m.position.set(x,y,z);
@@ -372,8 +359,7 @@ function makeCushionBox(w,h,d,x,y,z){
   tableGroup.add(m);
   return m;
 }
-const Z_FIGHT_GUARD = 0.006;
-const cushY = TABLE_Y + CUSHION_H/2 - Z_FIGHT_GUARD;
+const cushY = TABLE_Y + CUSHION_H/2;
 // long rails (x sides) split top/bottom for middle pocket gap
 const gap = POCKET_R*1.5;
 makeCushionBox(RAIL_W, CUSHION_H, TABLE_L/2 - gap - POCKET_R*0.6, -TABLE_W/2 - RAIL_W/2 + 0.02, cushY, -(TABLE_L/4 + gap/4));
@@ -384,53 +370,50 @@ makeCushionBox(RAIL_W, CUSHION_H, TABLE_L/2 - gap - POCKET_R*0.6,  TABLE_W/2 + R
 makeCushionBox(TABLE_W - POCKET_R*2.4, CUSHION_H, RAIL_W, 0, cushY, -TABLE_L/2 - RAIL_W/2 + 0.02);
 makeCushionBox(TABLE_W - POCKET_R*2.4, CUSHION_H, RAIL_W, 0, cushY,  TABLE_L/2 + RAIL_W/2 - 0.02);
 
-/* Wooden outer frame — shifted down by Z_FIGHT_GUARD so its top face sits
-   strictly below the felt plane instead of exactly on top of it. */
-const woodMat = new THREE.MeshLambertMaterial({color:0x3b2415});
+/* Wooden outer frame */
+const woodMat = new THREE.MeshStandardMaterial({color:0x3b2415, roughness:0.55, metalness:0.15});
 const frameOuterW = TABLE_W + RAIL_W*2 + 0.16;
 const frameOuterL = TABLE_L + RAIL_W*2 + 0.16;
-const frameY = TABLE_Y - 0.11 - Z_FIGHT_GUARD;
 const frame = new THREE.Mesh(new THREE.BoxGeometry(frameOuterW, 0.22, frameOuterL), woodMat);
-frame.position.set(0, frameY, 0);
+frame.position.set(0, TABLE_Y - 0.11, 0);
 frame.castShadow = true; frame.receiveShadow = true;
 tableGroup.add(frame);
-// brass corner trim accents (visual only, few enough to keep as a nicer material)
+// brass corner trim accents (visual only)
 const brassMat = new THREE.MeshStandardMaterial({color:0xc9a35b, metalness:0.7, roughness:0.35});
 [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
-  const trim = new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.24,isMobile?6:10), brassMat);
-  trim.position.set(sx*(frameOuterW/2-0.05), frameY, sz*(frameOuterL/2-0.05));
+  const trim = new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.24,10), brassMat);
+  trim.position.set(sx*(frameOuterW/2-0.05), TABLE_Y-0.11, sz*(frameOuterL/2-0.05));
   tableGroup.add(trim);
 });
 
 /* Legs */
-const legGeo = new THREE.CylinderGeometry(0.06,0.08,0.78,isMobile?6:10);
+const legGeo = new THREE.CylinderGeometry(0.06,0.08,0.78,10);
 [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
   const leg = new THREE.Mesh(legGeo, woodMat);
-  leg.position.set(sx*(frameOuterW/2-0.16), frameY-0.39, sz*(frameOuterL/2-0.32));
+  leg.position.set(sx*(frameOuterW/2-0.16), TABLE_Y-0.11-0.39, sz*(frameOuterL/2-0.32));
   leg.castShadow = true;
   tableGroup.add(leg);
 });
 
 /* Floor */
-const floorMat = new THREE.MeshLambertMaterial({color:0x161210});
+const floorMat = new THREE.MeshStandardMaterial({color:0x161210, roughness:0.9});
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(30,30), floorMat);
 floor.rotation.x = -Math.PI/2;
-floor.position.y = frameY - 0.9;
+floor.position.y = TABLE_Y - 0.9;
 floor.receiveShadow = true;
 scene.add(floor);
 
-/* Pockets (visual dark holes + rim) — comfortably separated in y from the
-   felt plane to avoid any depth-precision flicker on mobile screens. */
-const pocketMat = new THREE.MeshBasicMaterial({color:0x040404});
-const pocketRimMat = new THREE.MeshLambertMaterial({color:0x1c1108});
+/* Pockets (visual dark holes + rim) */
+const pocketMat = new THREE.MeshStandardMaterial({color:0x040404, roughness:0.9});
+const pocketRimMat = new THREE.MeshStandardMaterial({color:0x1c1108, roughness:0.6, metalness:0.2});
 POCKETS.forEach(p=>{
-  const hole = new THREE.Mesh(new THREE.CircleGeometry(POCKET_R, isMobile?14:24), pocketMat);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(POCKET_R, 24), pocketMat);
   hole.rotation.x = -Math.PI/2;
-  hole.position.set(p.x, TABLE_Y+0.006, p.z);
+  hole.position.set(p.x, TABLE_Y+0.002, p.z);
   tableGroup.add(hole);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(POCKET_R, 0.014, isMobile?6:8, isMobile?14:24), pocketRimMat);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(POCKET_R, 0.014, 8, 24), pocketRimMat);
   rim.rotation.x = -Math.PI/2;
-  rim.position.set(p.x, TABLE_Y+0.010, p.z);
+  rim.position.set(p.x, TABLE_Y+0.004, p.z);
   tableGroup.add(rim);
 });
 

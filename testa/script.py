@@ -1,55 +1,45 @@
-import os
-import platform
-import sys
+from java import jclass
 
-def get_sys_info(params=None):
-    """
-    Returns general operating system and environment diagnostics.
-    Triggered via GET/POST to /runner/api/<app_name>/get_sys_info
-    """
-    return {
-        "platform": platform.platform(),
-        "python_version": sys.version.split()[0],
-        "processor": platform.processor() or "Mobile / ARM Architecture",
-        "current_dir": os.getcwd()
-    }
+def get_location(params=None):
 
-def get_storage_stats(params=None):
-    """
-    Calculates storage usage for the main user-facing storage (/storage/emulated/0).
-    Triggered via GET/POST to /runner/api/<app_name>/get_storage_stats
-    """
     try:
-        # Check main shared storage path instead of isolated app working directory "."
-        storage_path = "/storage/emulated/0" if os.path.exists("/storage/emulated/0") else "."
-        
-        stats = os.statvfs(storage_path)
-        free_bytes = stats.f_bavail * stats.f_frsize
-        total_bytes = stats.f_blocks * stats.f_frsize
-        used_bytes = total_bytes - free_bytes
+
+        PythonActivity = jclass(
+            "org.beeware.android.MainActivity"
+        )
+
+        activity = PythonActivity.singletonThis
+
+        Context = jclass("android.content.Context")
+
+        location_manager = activity.getSystemService(
+            Context.LOCATION_SERVICE
+        )
+
+        location = location_manager.getLastKnownLocation(
+            "gps"
+        )
+
+        if location is None:
+
+            location = location_manager.getLastKnownLocation(
+                "network"
+            )
+
+        if location is None:
+
+            return {
+                "error": "No location available"
+            }
 
         return {
-            "total_gb": round(total_bytes / (1024**3), 2),
-            "used_gb": round(used_bytes / (1024**3), 2),
-            "free_gb": round(free_bytes / (1024**3), 2),
-            "used_percent": round((used_bytes / total_bytes) * 100, 1)
+            "latitude": location.getLatitude(),
+            "longitude": location.getLongitude(),
+            "accuracy": location.getAccuracy()
         }
-    except Exception as e:
-        return {"error": f"Storage query unavailable on platform: {str(e)}"}
 
-def calculate_hash(params=None):
-    """
-    Demonstrates processing custom input data sent from index.html.
-    Triggered via POST to /runner/api/<app_name>/calculate_hash
-    """
-    import hashlib
-    
-    text = params.get("input_text", "") if params else ""
-    if not text:
-        return {"error": "No text provided to hash."}
-        
-    hashed_value = hashlib.sha256(text.encode('utf-8')).hexdigest()
-    return {
-        "original": text,
-        "sha256": hashed_value
-    }
+    except Exception as e:
+
+        return {
+            "error": str(e)
+        }

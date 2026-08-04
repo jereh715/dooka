@@ -1,46 +1,55 @@
-import urllib.request
-import urllib.parse
 import os
+import platform
+import sys
 
-def scrape_jumia(params=None):
+def get_sys_info(params=None):
     """
-    Fetches raw HTML from Jumia Kenya, dumps it to local storage for inspection,
-    and returns a preview to the frontend.
+    Returns general operating system and environment diagnostics.
+    Triggered via GET/POST to /runner/api/<app_name>/get_sys_info
     """
-    search_query = params.get("query", "phones") if params else "phones"
-    encoded_query = urllib.parse.quote(search_query)
-    url = f"https://www.jumia.co.ke/catalog/?q={encoded_query}"
+    return {
+        "platform": platform.platform(),
+        "python_version": sys.version.split()[0],
+        "processor": platform.processor() or "Mobile / ARM Architecture",
+        "current_dir": os.getcwd()
+    }
 
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-        }
-    )
-
+def get_storage_stats(params=None):
+    """
+    Calculates storage usage for the main user-facing storage (/storage/emulated/0).
+    Triggered via GET/POST to /runner/api/<app_name>/get_storage_stats
+    """
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            html_data = response.read().decode('utf-8', errors='ignore')
-
-        # === DUMP TO LOCAL FILE ===
-        dump_path = "jumia_dump.html"
-        with open(dump_path, "w", encoding="utf-8") as f:
-            f.write(html_data)
-
-        full_dump_path = os.path.abspath(dump_path)
-
-        # Snippet of the first 1000 characters to inspect in UI
-        preview = html_data[:1000]
+        # Check main shared storage path instead of isolated app working directory "."
+        storage_path = "/storage/emulated/0" if os.path.exists("/storage/emulated/0") else "."
+        
+        stats = os.statvfs(storage_path)
+        free_bytes = stats.f_bavail * stats.f_frsize
+        total_bytes = stats.f_blocks * stats.f_frsize
+        used_bytes = total_bytes - free_bytes
 
         return {
-            "success": True,
-            "query": search_query,
-            "saved_to": full_dump_path,
-            "html_length": len(html_data),
-            "preview": preview
+            "total_gb": round(total_bytes / (1024**3), 2),
+            "used_gb": round(used_bytes / (1024**3), 2),
+            "free_gb": round(free_bytes / (1024**3), 2),
+            "used_percent": round((used_bytes / total_bytes) * 100, 1)
         }
-
     except Exception as e:
-        return {"error": f"Scrape failed: {str(e)}"}
+        return {"error": f"Storage query unavailable on platform: {str(e)}"}
+
+def calculate_hash(params=None):
+    """
+    Demonstrates processing custom input data sent from index.html.
+    Triggered via POST to /runner/api/<app_name>/calculate_hash
+    """
+    import hashlib
+    
+    text = params.get("input_text", "") if params else ""
+    if not text:
+        return {"error": "No text provided to hash."}
+        
+    hashed_value = hashlib.sha256(text.encode('utf-8')).hexdigest()
+    return {
+        "original": text,
+        "sha256": hashed_value
+    }

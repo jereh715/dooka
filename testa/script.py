@@ -11,6 +11,42 @@ def get_location(params=None):
         activity = PythonActivity.singletonThis
 
         Context = jclass("android.content.Context")
+        PackageManager = jclass(
+            "android.content.pm.PackageManager"
+        )
+
+        ActivityCompat = jclass(
+            "androidx.core.app.ActivityCompat"
+        )
+
+        Manifest = jclass(
+            "android.Manifest"
+        )
+
+        permission = Manifest.permission.ACCESS_FINE_LOCATION
+
+        # Check permission
+        granted = (
+            ActivityCompat.checkSelfPermission(
+                activity,
+                permission
+            )
+            == PackageManager.PERMISSION_GRANTED
+        )
+
+        if not granted:
+
+            ActivityCompat.requestPermissions(
+                activity,
+                [permission],
+                1001
+            )
+
+            return {
+                "error":
+                "Location permission requested. "
+                "Please tap the button again."
+            }
 
         location_manager = activity.getSystemService(
             Context.LOCATION_SERVICE
@@ -21,15 +57,14 @@ def get_location(params=None):
         )
 
         if location is None:
-
             location = location_manager.getLastKnownLocation(
                 "network"
             )
 
         if location is None:
-
             return {
-                "error": "No location available"
+                "error":
+                "No location available yet."
             }
 
         return {

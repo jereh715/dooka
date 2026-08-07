@@ -5,9 +5,14 @@ import threading
 import zipfile
 import urllib.request
 
-LOCAL_LIB_DIR = os.path.join(tempfile.gettempdir(), "libs")
-if not os.path.exists(LOCAL_LIB_DIR):
-    os.makedirs(LOCAL_LIB_DIR, exist_ok=True)
+# Setup writable storage paths
+BASE_TEMP = tempfile.gettempdir()
+LOCAL_LIB_DIR = os.path.join(BASE_TEMP, "libs")
+DOWNLOAD_DIR = os.path.join(BASE_TEMP, "audio_downloads")
+
+for folder in [LOCAL_LIB_DIR, DOWNLOAD_DIR]:
+    if not os.path.exists(folder):
+        os.makedirs(folder, exist_ok=True)
 
 if LOCAL_LIB_DIR not in sys.path:
     sys.path.insert(0, LOCAL_LIB_DIR)
@@ -33,7 +38,7 @@ def install_ytdlp_background():
         INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
         return
     except Exception:
-        INSTALLATION_STATUS["message"] = "Pip failed. Downloading wheel archive..."
+        INSTALLATION_STATUS["message"] = "Downloading wheel archive..."
 
     try:
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
@@ -72,7 +77,11 @@ def get_install_status(params=None):
     check_or_start_install()
     return INSTALLATION_STATUS
 
-def search_and_stream(params=None):
+def stream_and_trigger_download(params=None):
+    """
+    Returns immediate stream URL for playback AND triggers 
+    a silent background thread to download the low-quality track.
+    """
     if not check_or_start_install():
         return {"error": f"yt-dlp not ready: {INSTALLATION_STATUS['message']}"}
 
@@ -83,7 +92,6 @@ def search_and_stream(params=None):
 
     query = params.get("query")
 
-    # Request low-bitrate format to keep stream sizes under ~1.5MB
     ydl_opts = {
         'format': 'worstaudio[ext=webm]/worstaudio[ext=m4a]/worstaudio/worst',
         'noplaylist': True,
@@ -98,18 +106,70 @@ def search_and_stream(params=None):
             info = ydl.extract_info(f"ytsearch1:{query}", download=False)
             video = info['entries'][0] if 'entries' in info and info['entries'] else info
 
+            video_id = video.get('id')
             stream_url = video.get('url')
-            if not stream_url:
-                return {"error": "No streamable audio found."}
+            ext = video.get('ext', 'webm')
+            file_name = f"{video_id}.{ext}"
+            file_path = os.path.join(DOWNLOAD_DIR, file_name)
+
+            # Check if file already exists locally
+            is_saved = os.path.exists(file_path)
+
+            if not stream_url and not is_saved:
+                return {"error": "No playable stream found."}
+
+            # Trigger silent download in background if not already saved
+            if not is_saved:
+                thread = threading.Thread(target=_silent_download_worker, args=(query, file_path))
+                thread.daemon = True
+                thread.start()
 
             return {
                 "success": True,
+                "id": video_id,
                 "title": video.get('title', 'Unknown Title'),
                 "artist": video.get('uploader', 'Unknown Artist'),
                 "thumbnail": video.get('thumbnail', ''),
-                "duration": video.get('duration', 0),
-                "stream_url": stream_url
+                "stream_url": stream_url,
+                "file_name": file_name,
+                "is_saved": is_saved
             }
 
     except Exception as e:
-        return {"error": f"Stream error: {str(e)}"}
+        return {"error": f"Extraction error: {str(e)}"}
+
+def _silent_download_worker(query, target_path):
+    """Worker function for silent background downloading."""
+    import yt_dlp
+    ydl_opts = {
+        'format': 'worstaudio[ext=webm]/worstaudio[ext=m4a]/worstaudio/worst',
+        'outtmpl': target_path,
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+        'default_search': 'ytsearch1',
+        'nocheckcertificate': True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([f"ytsearch1:{query}"])
+    except Exception as e:
+        print(f"Background download failed for {query}: {e}")
+
+def check_file_status(params=None):
+    """Polls whether the silent background download completed."""
+    if not params or not params.get("file_name"):
+        return {"is_saved": False}
+    file_path = os.path.join(DOWNLOAD_DIR, params.get("file_name"))
+    return {"is_saved": os.path.exists(file_path)}
+
+def delete_local_file(params=None):
+    """Deletes the locally downloaded file."""
+    if not params or not params.get("file"):
+        return {"error": "No file name provided."}
+    
+    file_path = os.path.join(DOWNLOAD_DIR, params.get("file"))
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return {"success": True}
+    return {"error": "File not found."}

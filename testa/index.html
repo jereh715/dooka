@@ -3,50 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Location Test</title>
-
+    <title>YouTube Audio Streamer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
     <style>
         body {
             background-color: #0d1117;
             color: #c9d1d9;
-            font-family: system-ui, sans-serif;
+            font-family: system-ui, -apple-system, sans-serif;
         }
     </style>
 </head>
-
 <body class="p-4 flex flex-col min-h-screen">
 
-    <div class="max-w-xl mx-auto w-full">
+    <div class="max-w-xl mx-auto w-full space-y-4">
 
-        <div class="border-b border-gray-800 pb-3 mb-4">
-            <h1 class="text-xl font-bold text-white">
-                📍 GPS Location Viewer
+        <!-- Header -->
+        <div class="border-b border-gray-800 pb-3">
+            <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                🎵 Android Audio Player
             </h1>
             <p class="text-xs text-gray-500">
-                Android Location via Python Backend
+                Powered by Python & yt-dlp
             </p>
         </div>
 
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <!-- Search Bar -->
+        <div class="flex gap-2">
+            <input 
+                type="text" 
+                id="search-input" 
+                placeholder="Search song or artist..." 
+                class="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500 w-full"
+                onkeydown="if(event.key === 'Enter') searchAndPlay()"
+            />
+            <button 
+                id="search-btn"
+                onclick="searchAndPlay()" 
+                class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-semibold text-white transition-colors"
+            >
+                Search
+            </button>
+        </div>
 
-            <div class="flex justify-between items-center mb-3">
-                <h2 class="text-green-400 font-semibold">
-                    Current Coordinates
-                </h2>
-
-                <button
-                    onclick="getLocation()"
-                    class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm"
-                >
-                    Get Location
-                </button>
+        <!-- Track Card & Player -->
+        <div id="player-card" class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            
+            <div id="status" class="font-mono text-sm text-gray-400 text-center py-6">
+                Search for a track above to begin playback.
             </div>
 
-            <div id="location-content"
-                 class="font-mono text-sm text-gray-300">
-                Press "Get Location"
+            <div id="track-details" class="hidden space-y-4">
+                <div class="flex items-center gap-4">
+                    <img id="track-thumb" src="" alt="Thumbnail" class="w-16 h-16 object-cover rounded bg-gray-800" />
+                    <div class="overflow-hidden">
+                        <h2 id="track-title" class="text-white font-semibold text-sm truncate">---</h2>
+                        <p id="track-artist" class="text-xs text-gray-400 truncate">---</p>
+                    </div>
+                </div>
+
+                <!-- HTML5 Native Audio Player -->
+                <audio id="audio-player" controls class="w-full mt-2">
+                    Your browser does not support audio playback.
+                </audio>
             </div>
 
         </div>
@@ -54,79 +72,71 @@
     </div>
 
 <script>
-
-// Keep using your existing app name
 const APP_NAME = "testa";
 
-async function getLocation() {
+async function searchAndPlay() {
+    const queryInput = document.getElementById("search-input");
+    const searchBtn = document.getElementById("search-btn");
+    const query = queryInput.value.trim();
+    const status = document.getElementById("status");
+    const trackDetails = document.getElementById("track-details");
+    const audioPlayer = document.getElementById("audio-player");
 
-    const container =
-        document.getElementById("location-content");
+    if (!query) return;
 
-    container.innerHTML =
-        '<span class="text-yellow-400">Requesting GPS...</span>';
+    // UI state loading setup
+    searchBtn.disabled = true;
+    searchBtn.classList.add("opacity-50", "cursor-not-allowed");
+    status.classList.remove("hidden");
+    status.innerHTML = `
+        <div class="space-y-2">
+            <span class="text-yellow-400 animate-pulse block">Processing request...</span>
+            <span class="text-xs text-gray-500 block">(First run may take a few moments to set up yt-dlp locally)</span>
+        </div>
+    `;
+    trackDetails.classList.add("hidden");
+    audioPlayer.pause();
 
     try {
-
-        const response =
-            await fetch(`/runner/api/${APP_NAME}/get_location`);
-
+        // Send request to Python backend endpoint
+        const response = await fetch(`/runner/api/${APP_NAME}/search_and_stream?query=${encodeURIComponent(query)}`);
         const res = await response.json();
 
-        if (res.success && res.data) {
+        // Handle error responses from script.py
+        if (res.error) {
+            status.innerHTML = `<span class="text-red-400">${res.error}</span>`;
+            return;
+        }
 
-            if (res.data.error) {
+        const data = res.data || res;
 
-                container.innerHTML = `
-                    <span class="text-red-400">
-                        ${res.data.error}
-                    </span>
-                `;
+        if (data.stream_url) {
+            // Populate track details
+            document.getElementById("track-title").textContent = data.title;
+            document.getElementById("track-artist").textContent = data.artist;
+            document.getElementById("track-thumb").src = data.thumbnail;
 
-                return;
-            }
+            // Load and play direct audio URL
+            audioPlayer.src = data.stream_url;
+            
+            status.classList.add("hidden");
+            trackDetails.classList.remove("hidden");
 
-            container.innerHTML = `
-                <div class="space-y-1">
-                    <div>
-                        <span class="text-gray-500">Latitude:</span>
-                        ${res.data.latitude}
-                    </div>
-
-                    <div>
-                        <span class="text-gray-500">Longitude:</span>
-                        ${res.data.longitude}
-                    </div>
-
-                    <div>
-                        <span class="text-gray-500">Accuracy:</span>
-                        ${res.data.accuracy} m
-                    </div>
-                </div>
-            `;
-
+            audioPlayer.play().catch(e => {
+                console.warn("Autoplay blocked or user interaction required:", e);
+            });
         } else {
-
-            container.innerHTML = `
-                <span class="text-red-400">
-                    ${res.error || "Unknown error"}
-                </span>
-            `;
-
+            status.innerHTML = '<span class="text-red-400">No streamable audio found.</span>';
         }
 
     } catch (err) {
-
-        container.innerHTML = `
-            <span class="text-red-400">
-                Failed to contact Python backend.
-            </span>
-        `;
-
+        status.innerHTML = '<span class="text-red-400">Failed to connect to Python backend.</span>';
         console.error(err);
+    } finally {
+        searchBtn.disabled = false;
+        searchBtn.classList.remove("opacity-50", "cursor-not-allowed");
     }
 }
-
 </script>
 
 </body>

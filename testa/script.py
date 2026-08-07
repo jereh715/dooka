@@ -1,28 +1,29 @@
 import os
 import sys
+import tempfile
 
-# 1. Target a writable directory for local installation
-LOCAL_LIB_DIR = os.path.join(os.getcwd(), "libs")
+# Use system temp/internal data directory instead of os.getcwd()
+LOCAL_LIB_DIR = os.path.join(tempfile.gettempdir(), "libs")
 
 if not os.path.exists(LOCAL_LIB_DIR):
-    os.makedirs(LOCAL_LIB_DIR)
+    os.makedirs(LOCAL_LIB_DIR, exist_ok=True)
 
-# 2. Add local directory to Python's module search path
 if LOCAL_LIB_DIR not in sys.path:
     sys.path.insert(0, LOCAL_LIB_DIR)
 
 def ensure_ytdlp_installed():
-    """Checks if yt_dlp is imported; if missing, installs it into LOCAL_LIB_DIR via pip."""
     try:
         import yt_dlp
         return True
     except ImportError:
         try:
             import pip
-            # Execute pip install programmatically pointing to LOCAL_LIB_DIR
+            # Install into writable temp/data folder
             pip.main(['install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps'])
             
-            # Re-attempt import after installation
+            if LOCAL_LIB_DIR not in sys.path:
+                sys.path.insert(0, LOCAL_LIB_DIR)
+
             import yt_dlp
             return True
         except Exception as e:
@@ -30,12 +31,8 @@ def ensure_ytdlp_installed():
             return False
 
 def search_and_stream(params=None):
-    """
-    Ensures yt-dlp is installed, searches YouTube using the query, 
-    and returns direct audio stream URL.
-    """
     if not ensure_ytdlp_installed():
-        return {"error": "Failed to install or load yt-dlp on the device."}
+        return {"error": "Failed to install or load yt-dlp on device."}
 
     import yt_dlp
 
@@ -69,7 +66,7 @@ def search_and_stream(params=None):
             duration = video.get('duration', 0)
 
             if not stream_url:
-                return {"error": "Could not extract direct audio stream URL."}
+                return {"error": "Could not extract audio stream URL."}
 
             return {
                 "success": True,

@@ -3,14 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Audio Streamer</title>
+    <title>Low-Data YouTube Playlist</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            background-color: #0d1117;
-            color: #c9d1d9;
-            font-family: system-ui, -apple-system, sans-serif;
-        }
+        body { background-color: #0d1117; color: #c9d1d9; font-family: system-ui, sans-serif; }
     </style>
 </head>
 <body class="p-4 flex flex-col min-h-screen">
@@ -20,16 +16,11 @@
         <!-- Header -->
         <div class="border-b border-gray-800 pb-3 flex justify-between items-center">
             <div>
-                <h1 class="text-xl font-bold text-white flex items-center gap-2">
-                    🎵 Android Audio Player
-                </h1>
-                <p class="text-xs text-gray-500">
-                    Powered by Python & yt-dlp
-                </p>
+                <h1 class="text-xl font-bold text-white">🎵 Low-Data Player</h1>
+                <p class="text-xs text-gray-500">Auto-queue & ~1MB Low-Bitrate Streams</p>
             </div>
-            <!-- Live Status Badge -->
             <div id="status-badge" class="text-xs px-2 py-1 rounded bg-gray-800 text-gray-400">
-                Checking dependencies...
+                Checking...
             </div>
         </div>
 
@@ -38,49 +29,60 @@
             <input 
                 type="text" 
                 id="search-input" 
-                placeholder="Search song or artist..." 
+                placeholder="Search track to add..." 
                 class="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500 w-full"
-                onkeydown="if(event.key === 'Enter') searchAndPlay()"
+                onkeydown="if(event.key === 'Enter') addTrackToQueue()"
             />
             <button 
-                id="search-btn"
-                onclick="searchAndPlay()" 
-                class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-semibold text-white transition-colors"
+                id="add-btn"
+                onclick="addTrackToQueue()" 
+                class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-semibold text-white transition-colors whitespace-nowrap"
             >
-                Search
+                + Add
             </button>
         </div>
 
-        <!-- Track Card & Player -->
-        <div id="player-card" class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            
-            <div id="status" class="font-mono text-sm text-gray-400 text-center py-6">
-                Search for a track above to begin playback.
+        <!-- Active Player -->
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
+            <div id="player-status" class="text-xs text-gray-500 text-center py-2">
+                Queue is empty.
             </div>
 
-            <div id="track-details" class="hidden space-y-4">
-                <div class="flex items-center gap-4">
-                    <img id="track-thumb" src="" alt="Thumbnail" class="w-16 h-16 object-cover rounded bg-gray-800" />
-                    <div class="overflow-hidden">
-                        <h2 id="track-title" class="text-white font-semibold text-sm truncate">---</h2>
-                        <p id="track-artist" class="text-xs text-gray-400 truncate">---</p>
-                    </div>
+            <div id="now-playing-card" class="hidden flex items-center gap-3">
+                <img id="track-thumb" src="" class="w-12 h-12 object-cover rounded bg-gray-800" />
+                <div class="overflow-hidden">
+                    <h2 id="track-title" class="text-white font-semibold text-sm truncate">---</h2>
+                    <p id="track-artist" class="text-xs text-gray-400 truncate">---</p>
                 </div>
-
-                <audio id="audio-player" controls class="w-full mt-2">
-                    Your browser does not support audio playback.
-                </audio>
             </div>
 
+            <audio id="audio-player" controls class="w-full">
+                Your browser does not support audio playback.
+            </audio>
+        </div>
+
+        <!-- Playlist Queue -->
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-2">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 border-b border-gray-800 pb-2">
+                Up Next (<span id="queue-count">0</span>)
+            </h3>
+            <div id="queue-list" class="space-y-2 text-sm"></div>
         </div>
 
     </div>
 
 <script>
 const APP_NAME = "testa";
-let installPoller = null;
+let playlist = [];
+let currentTrackIndex = -1;
 
-// Poll installation status on launch
+const audioPlayer = document.getElementById("audio-player");
+
+// Autoplay next track when current one finishes
+audioPlayer.addEventListener("ended", () => {
+    playNextTrack();
+});
+
 async function checkInstallStatus() {
     const badge = document.getElementById("status-badge");
     try {
@@ -91,76 +93,114 @@ async function checkInstallStatus() {
         if (data.is_installed) {
             badge.className = "text-xs px-2 py-1 rounded bg-green-950 text-green-400 border border-green-800";
             badge.textContent = "yt-dlp Ready";
-            if (installPoller) clearInterval(installPoller);
         } else if (data.is_installing) {
             badge.className = "text-xs px-2 py-1 rounded bg-yellow-950 text-yellow-400 border border-yellow-800 animate-pulse";
-            badge.textContent = data.message || "Installing yt-dlp...";
-        } else if (data.error) {
-            badge.className = "text-xs px-2 py-1 rounded bg-red-950 text-red-400 border border-red-800";
-            badge.textContent = "Setup Failed";
-            if (installPoller) clearInterval(installPoller);
+            badge.textContent = "Installing...";
         }
     } catch (e) {
-        console.error("Status check failed", e);
+        console.error("Status error", e);
     }
 }
-
-// Start polling status immediately
+setInterval(checkInstallStatus, 3000);
 checkInstallStatus();
-installPoller = setInterval(checkInstallStatus, 3000);
 
-async function searchAndPlay() {
-    const queryInput = document.getElementById("search-input");
-    const searchBtn = document.getElementById("search-btn");
-    const query = queryInput.value.trim();
-    const status = document.getElementById("status");
-    const trackDetails = document.getElementById("track-details");
-    const audioPlayer = document.getElementById("audio-player");
+async function addTrackToQueue() {
+    const input = document.getElementById("search-input");
+    const query = input.value.trim();
+    const btn = document.getElementById("add-btn");
+    const status = document.getElementById("player-status");
 
     if (!query) return;
 
-    searchBtn.disabled = true;
-    searchBtn.classList.add("opacity-50", "cursor-not-allowed");
-    status.classList.remove("hidden");
-    status.innerHTML = '<span class="text-yellow-400 animate-pulse block">Searching YouTube & extracting audio stream...</span>';
-    trackDetails.classList.add("hidden");
-    audioPlayer.pause();
+    btn.disabled = true;
+    btn.classList.add("opacity-50");
+    status.textContent = "Extracting low-data stream (~1MB)...";
 
     try {
         const response = await fetch(`/runner/api/${APP_NAME}/search_and_stream?query=${encodeURIComponent(query)}`);
         const res = await response.json();
-
-        if (res.error) {
-            status.innerHTML = `<span class="text-red-400">${res.error}</span>`;
-            return;
-        }
-
         const data = res.data || res;
 
         if (data.stream_url) {
-            document.getElementById("track-title").textContent = data.title;
-            document.getElementById("track-artist").textContent = data.artist;
-            document.getElementById("track-thumb").src = data.thumbnail;
+            playlist.push(data);
+            input.value = "";
+            status.textContent = "Track added to queue.";
+            renderQueue();
 
-            audioPlayer.src = data.stream_url;
-            
-            status.classList.add("hidden");
-            trackDetails.classList.remove("hidden");
-
-            audioPlayer.play().catch(e => {
-                console.warn("Autoplay blocked:", e);
-            });
+            // If nothing is playing, play immediately
+            if (currentTrackIndex === -1) {
+                playTrack(0);
+            }
         } else {
-            status.innerHTML = '<span class="text-red-400">No streamable audio found.</span>';
+            status.textContent = res.error || "Could not find stream.";
         }
-
-    } catch (err) {
-        status.innerHTML = '<span class="text-red-400">Failed to connect to Python backend.</span>';
-        console.error(err);
+    } catch (e) {
+        status.textContent = "Failed to communicate with backend.";
     } finally {
-        searchBtn.disabled = false;
-        searchBtn.classList.remove("opacity-50", "cursor-not-allowed");
+        btn.disabled = false;
+        btn.classList.remove("opacity-50");
     }
+}
+
+function renderQueue() {
+    const list = document.getElementById("queue-list");
+    document.getElementById("queue-count").textContent = playlist.length;
+    list.innerHTML = "";
+
+    playlist.forEach((track, idx) => {
+        const isCurrent = idx === currentTrackIndex;
+        const item = document.createElement("div");
+        item.className = `flex justify-between items-center p-2 rounded text-xs ${isCurrent ? 'bg-green-950 text-green-300 border border-green-800' : 'bg-gray-800/50 text-gray-300'}`;
+        
+        item.innerHTML = `
+            <div class="truncate cursor-pointer flex-1 mr-2" onclick="playTrack(${idx})">
+                <span class="font-bold">${idx + 1}.</span> ${track.title}
+            </div>
+            <button onclick="removeTrack(${idx})" class="text-red-400 hover:text-red-300 px-1">✕</button>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function playTrack(index) {
+    if (index < 0 || index >= playlist.length) return;
+
+    currentTrackIndex = index;
+    const track = playlist[index];
+
+    document.getElementById("now-playing-card").classList.remove("hidden");
+    document.getElementById("track-title").textContent = track.title;
+    document.getElementById("track-artist").textContent = track.artist;
+    document.getElementById("track-thumb").src = track.thumbnail;
+
+    audioPlayer.src = track.stream_url;
+    audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
+
+    renderQueue();
+}
+
+function playNextTrack() {
+    if (currentTrackIndex + 1 < playlist.length) {
+        playTrack(currentTrackIndex + 1);
+    } else {
+        document.getElementById("player-status").textContent = "Reached end of playlist.";
+    }
+}
+
+function removeTrack(index) {
+    playlist.splice(index, 1);
+    if (currentTrackIndex === index) {
+        if (playlist.length > 0) {
+            playTrack(Math.min(index, playlist.length - 1));
+        } else {
+            currentTrackIndex = -1;
+            audioPlayer.pause();
+            document.getElementById("now-playing-card").classList.add("hidden");
+        }
+    } else if (currentTrackIndex > index) {
+        currentTrackIndex--;
+    }
+    renderQueue();
 }
 </script>
 

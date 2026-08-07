@@ -1,38 +1,91 @@
 import os
 import sys
 import tempfile
+import threading
+import zipfile
+import urllib.request
 
-# Use system temp/internal data directory instead of os.getcwd()
+# Setup writable directory
 LOCAL_LIB_DIR = os.path.join(tempfile.gettempdir(), "libs")
-
 if not os.path.exists(LOCAL_LIB_DIR):
     os.makedirs(LOCAL_LIB_DIR, exist_ok=True)
 
 if LOCAL_LIB_DIR not in sys.path:
     sys.path.insert(0, LOCAL_LIB_DIR)
 
-def ensure_ytdlp_installed():
+# Global status tracking
+INSTALLATION_STATUS = {
+    "is_installed": False,
+    "is_installing": False,
+    "message": "Initializing...",
+    "error": None
+}
+
+def install_ytdlp_background():
+    global INSTALLATION_STATUS
+    INSTALLATION_STATUS["is_installing"] = True
+    INSTALLATION_STATUS["message"] = "Downloading yt-dlp..."
+
+    try:
+        # Attempt 1: Standard pip install
+        import pip
+        pip.main(['install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet'])
+        
+        import yt_dlp
+        INSTALLATION_STATUS["is_installed"] = True
+        INSTALLATION_STATUS["is_installing"] = False
+        INSTALLATION_STATUS["message"] = "yt-dlp successfully installed!"
+        return
+    except Exception as e1:
+        INSTALLATION_STATUS["message"] = "Pip failed. Falling back to direct wheel download..."
+
+    try:
+        # Attempt 2: Fallback download directly from PyPI/GitHub if pip module fails
+        url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+        target_zip = os.path.join(LOCAL_LIB_DIR, "yt_dlp_zip.zip")
+        
+        urllib.request.urlretrieve(url, target_zip)
+        
+        # Extract zip/tar package into libs directory
+        with zipfile.ZipFile(target_zip, 'r') as zip_ref:
+            zip_ref.extractall(LOCAL_LIB_DIR)
+
+        if LOCAL_LIB_DIR not in sys.path:
+            sys.path.insert(0, LOCAL_LIB_DIR)
+
+        import yt_dlp
+        INSTALLATION_STATUS["is_installed"] = True
+        INSTALLATION_STATUS["is_installing"] = False
+        INSTALLATION_STATUS["message"] = "yt-dlp downloaded and loaded successfully!"
+    except Exception as e2:
+        INSTALLATION_STATUS["is_installing"] = False
+        INSTALLATION_STATUS["error"] = f"Installation error: {str(e2)}"
+        INSTALLATION_STATUS["message"] = "Installation failed."
+
+def check_or_start_install():
+    global INSTALLATION_STATUS
     try:
         import yt_dlp
+        INSTALLATION_STATUS["is_installed"] = True
+        INSTALLATION_STATUS["message"] = "Ready"
         return True
     except ImportError:
-        try:
-            import pip
-            # Install into writable temp/data folder
-            pip.main(['install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps'])
-            
-            if LOCAL_LIB_DIR not in sys.path:
-                sys.path.insert(0, LOCAL_LIB_DIR)
+        if not INSTALLATION_STATUS["is_installing"]:
+            thread = threading.Thread(target=install_ytdlp_background)
+            thread.daemon = True
+            thread.start()
+        return False
 
-            import yt_dlp
-            return True
-        except Exception as e:
-            print(f"Failed to auto-install yt-dlp: {e}")
-            return False
+def get_install_status(params=None):
+    """API endpoint to query installation status from JS"""
+    check_or_start_install()
+    return INSTALLATION_STATUS
 
 def search_and_stream(params=None):
-    if not ensure_ytdlp_installed():
-        return {"error": "Failed to install or load yt-dlp on device."}
+    if not check_or_start_install():
+        return {
+            "error": f"yt-dlp is not ready. Current status: {INSTALLATION_STATUS['message']}"
+        }
 
     import yt_dlp
 
@@ -41,13 +94,14 @@ def search_and_stream(params=None):
 
     query = params.get("query")
 
+    # Mobile-optimized YoutubeDL options
     ydl_opts = {
         'format': 'bestaudio/best',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
-        'extract_flat': False,
         'default_search': 'ytsearch1',
+        'nocheckcertificate': True,
     }
 
     try:
@@ -66,7 +120,7 @@ def search_and_stream(params=None):
             duration = video.get('duration', 0)
 
             if not stream_url:
-                return {"error": "Could not extract audio stream URL."}
+                return {"error": "No streamable audio found for this query."}
 
             return {
                 "success": True,
@@ -78,4 +132,4 @@ def search_and_stream(params=None):
             }
 
     except Exception as e:
-        return {"error": f"Failed to fetch stream: {str(e)}"}
+        return {"error": f"Stream error: {str(e)}"}

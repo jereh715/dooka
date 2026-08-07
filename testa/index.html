@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Low-Data YouTube Playlist</title>
+    <title>Hybrid Stream & Silent Download Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0d1117; color: #c9d1d9; font-family: system-ui, sans-serif; }
@@ -16,8 +16,8 @@
         <!-- Header -->
         <div class="border-b border-gray-800 pb-3 flex justify-between items-center">
             <div>
-                <h1 class="text-xl font-bold text-white">🎵 Persistent Player</h1>
-                <p class="text-xs text-gray-500">Auto-saves playlist locally</p>
+                <h1 class="text-xl font-bold text-white">⚡ Instant Stream & Auto-Vault</h1>
+                <p class="text-xs text-gray-500">Streams instantly + saves low-data copy silently</p>
             </div>
             <div id="status-badge" class="text-xs px-2 py-1 rounded bg-gray-800 text-gray-400">
                 Checking...
@@ -29,16 +29,16 @@
             <input 
                 type="text" 
                 id="search-input" 
-                placeholder="Search track to add..." 
+                placeholder="Search song to play & save..." 
                 class="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500 w-full"
-                onkeydown="if(event.key === 'Enter') addTrackToQueue()"
+                onkeydown="if(event.key === 'Enter') addAndPlayTrack()"
             />
             <button 
                 id="add-btn"
-                onclick="addTrackToQueue()" 
+                onclick="addAndPlayTrack()" 
                 class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-semibold text-white transition-colors whitespace-nowrap"
             >
-                + Add
+                ▶ Play
             </button>
         </div>
 
@@ -50,9 +50,12 @@
 
             <div id="now-playing-card" class="hidden flex items-center gap-3">
                 <img id="track-thumb" src="" class="w-12 h-12 object-cover rounded bg-gray-800" />
-                <div class="overflow-hidden">
+                <div class="overflow-hidden flex-1">
                     <h2 id="track-title" class="text-white font-semibold text-sm truncate">---</h2>
                     <p id="track-artist" class="text-xs text-gray-400 truncate">---</p>
+                </div>
+                <div id="playback-source" class="text-[10px] px-2 py-1 rounded bg-gray-800 text-gray-400 whitespace-nowrap">
+                    ---
                 </div>
             </div>
 
@@ -61,13 +64,12 @@
             </audio>
         </div>
 
-        <!-- Playlist Queue -->
+        <!-- Playlist -->
         <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-2">
             <div class="flex justify-between items-center border-b border-gray-800 pb-2">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">
-                    Up Next (<span id="queue-count">0</span>)
+                    Playlist (<span id="queue-count">0</span>)
                 </h3>
-                <button onclick="clearPlaylist()" class="text-xs text-red-400 hover:underline">Clear All</button>
             </div>
             <div id="queue-list" class="space-y-2 text-sm"></div>
         </div>
@@ -76,20 +78,17 @@
 
 <script>
 const APP_NAME = "testa";
-const STORAGE_KEY = "my_app_playlist";
+const STORAGE_KEY = "hybrid_playlist_vault";
 
-// Load playlist from localStorage on app open
 let playlist = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 let currentTrackIndex = -1;
 
 const audioPlayer = document.getElementById("audio-player");
 
-// Autoplay next track on end
 audioPlayer.addEventListener("ended", () => {
     playNextTrack();
 });
 
-// Save playlist changes locally
 function savePlaylist() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
     renderQueue();
@@ -110,13 +109,13 @@ async function checkInstallStatus() {
             badge.textContent = "Installing...";
         }
     } catch (e) {
-        console.error("Status check failed", e);
+        console.error("Status error", e);
     }
 }
 setInterval(checkInstallStatus, 3000);
 checkInstallStatus();
 
-async function addTrackToQueue() {
+async function addAndPlayTrack() {
     const input = document.getElementById("search-input");
     const query = input.value.trim();
     const btn = document.getElementById("add-btn");
@@ -126,39 +125,68 @@ async function addTrackToQueue() {
 
     btn.disabled = true;
     btn.classList.add("opacity-50");
-    status.textContent = "Extracting low-data stream (~1MB)...";
+    status.textContent = "Fetching instant stream link...";
 
     try {
-        const response = await fetch(`/runner/api/${APP_NAME}/search_and_stream?query=${encodeURIComponent(query)}`);
+        const response = await fetch(`/runner/api/${APP_NAME}/stream_and_trigger_download?query=${encodeURIComponent(query)}`);
         const res = await response.json();
         const data = res.data || res;
 
-        if (data.stream_url) {
-            // Save metadata and original query for link auto-refreshing
-            playlist.push({
+        if (data.success) {
+            const trackObj = {
                 query: query,
+                id: data.id,
                 title: data.title,
                 artist: data.artist,
                 thumbnail: data.thumbnail,
-                stream_url: data.stream_url
-            });
+                stream_url: data.stream_url,
+                file_name: data.file_name,
+                is_saved: data.is_saved
+            };
 
+            playlist.push(trackObj);
             input.value = "";
-            status.textContent = "Track added to playlist.";
             savePlaylist();
+
+            // Start background polling to check when silent download finishes
+            if (!trackObj.is_saved) {
+                pollDownloadStatus(playlist.length - 1);
+            }
 
             if (currentTrackIndex === -1) {
                 playTrack(playlist.length - 1);
             }
         } else {
-            status.textContent = res.error || "Could not find stream.";
+            status.textContent = res.error || "Could not fetch track.";
         }
     } catch (e) {
-        status.textContent = "Failed to communicate with backend.";
+        status.textContent = "Backend connection error.";
     } finally {
         btn.disabled = false;
         btn.classList.remove("opacity-50");
     }
+}
+
+function pollDownloadStatus(index) {
+    const pollInterval = setInterval(async () => {
+        if (!playlist[index]) {
+            clearInterval(pollInterval);
+            return;
+        }
+
+        try {
+            const res = await fetch(`/runner/api/${APP_NAME}/check_file_status?file_name=${encodeURIComponent(playlist[index].file_name)}`);
+            const data = await res.json();
+            
+            if (data.is_saved) {
+                playlist[index].is_saved = true;
+                savePlaylist();
+                clearInterval(pollInterval);
+            }
+        } catch (e) {
+            console.error("Polling error", e);
+        }
+    }, 3000);
 }
 
 function renderQueue() {
@@ -166,16 +194,26 @@ function renderQueue() {
     document.getElementById("queue-count").textContent = playlist.length;
     list.innerHTML = "";
 
+    if (playlist.length === 0) {
+        list.innerHTML = '<div class="text-xs text-gray-500 text-center py-2">Playlist empty.</div>';
+        return;
+    }
+
     playlist.forEach((track, idx) => {
         const isCurrent = idx === currentTrackIndex;
         const item = document.createElement("div");
         item.className = `flex justify-between items-center p-2 rounded text-xs ${isCurrent ? 'bg-green-950 text-green-300 border border-green-800' : 'bg-gray-800/50 text-gray-300'}`;
         
+        const statusLabel = track.is_saved 
+            ? '<span class="text-[10px] text-green-400">💾 Saved Offline</span>' 
+            : '<span class="text-[10px] text-yellow-500 animate-pulse">⏳ Downloading low-data file...</span>';
+
         item.innerHTML = `
             <div class="truncate cursor-pointer flex-1 mr-2" onclick="playTrack(${idx})">
                 <span class="font-bold">${idx + 1}.</span> ${track.title}
+                <div class="block">${statusLabel}</div>
             </div>
-            <button onclick="removeTrack(${idx})" class="text-red-400 hover:text-red-300 px-1">✕</button>
+            <button onclick="deleteTrack(${idx})" class="text-red-400 hover:text-red-300 px-1">✕</button>
         `;
         list.appendChild(item);
     });
@@ -187,31 +225,22 @@ async function playTrack(index) {
     currentTrackIndex = index;
     const track = playlist[index];
     const status = document.getElementById("player-status");
+    const sourceBadge = document.getElementById("playback-source");
 
     document.getElementById("now-playing-card").classList.remove("hidden");
     document.getElementById("track-title").textContent = track.title;
     document.getElementById("track-artist").textContent = track.artist;
     document.getElementById("track-thumb").src = track.thumbnail;
 
-    status.textContent = "Refreshing stream link...";
-
-    try {
-        // Automatically request a fresh stream URL in case link expired
-        const response = await fetch(`/runner/api/${APP_NAME}/search_and_stream?query=${encodeURIComponent(track.query)}`);
-        const res = await response.json();
-        const data = res.data || res;
-
-        if (data.stream_url) {
-            track.stream_url = data.stream_url;
-            audioPlayer.src = data.stream_url;
-            audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
-            status.textContent = "Now Playing";
-        } else {
-            status.textContent = "Stream link expired or unreachable.";
-        }
-    } catch (e) {
-        status.textContent = "Error refreshing audio stream.";
+    // Direct playback using YouTube stream URL (or cached file if saved)
+    if (track.stream_url) {
+        audioPlayer.src = track.stream_url;
+        sourceBadge.textContent = "📡 Streaming Live";
+        sourceBadge.className = "text-[10px] px-2 py-1 rounded bg-blue-950 text-blue-300 border border-blue-800";
     }
+
+    audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
+    status.textContent = "Playing";
 
     renderQueue();
 }
@@ -224,7 +253,15 @@ function playNextTrack() {
     }
 }
 
-function removeTrack(index) {
+async function deleteTrack(index) {
+    const track = playlist[index];
+    
+    try {
+        await fetch(`/runner/api/${APP_NAME}/delete_local_file?file=${encodeURIComponent(track.file_name)}`);
+    } catch (e) {
+        console.error("Delete failed", e);
+    }
+
     playlist.splice(index, 1);
     if (currentTrackIndex === index) {
         if (playlist.length > 0) {
@@ -240,16 +277,11 @@ function removeTrack(index) {
     savePlaylist();
 }
 
-function clearPlaylist() {
-    playlist = [];
-    currentTrackIndex = -1;
-    audioPlayer.pause();
-    document.getElementById("now-playing-card").classList.add("hidden");
-    document.getElementById("player-status").textContent = "Queue cleared.";
-    savePlaylist();
-}
+// Check status on startup for existing tracks
+playlist.forEach((track, idx) => {
+    if (!track.is_saved) pollDownloadStatus(idx);
+});
 
-// Initial render of saved playlist
 renderQueue();
 </script>
 

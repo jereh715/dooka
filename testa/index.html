@@ -16,8 +16,8 @@
         <!-- Header -->
         <div class="border-b border-gray-800 pb-3 flex justify-between items-center">
             <div>
-                <h1 class="text-xl font-bold text-white">🎵 Low-Data Player</h1>
-                <p class="text-xs text-gray-500">Auto-queue & ~1MB Low-Bitrate Streams</p>
+                <h1 class="text-xl font-bold text-white">🎵 Persistent Player</h1>
+                <p class="text-xs text-gray-500">Auto-saves playlist locally</p>
             </div>
             <div id="status-badge" class="text-xs px-2 py-1 rounded bg-gray-800 text-gray-400">
                 Checking...
@@ -63,9 +63,12 @@
 
         <!-- Playlist Queue -->
         <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-2">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 border-b border-gray-800 pb-2">
-                Up Next (<span id="queue-count">0</span>)
-            </h3>
+            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">
+                    Up Next (<span id="queue-count">0</span>)
+                </h3>
+                <button onclick="clearPlaylist()" class="text-xs text-red-400 hover:underline">Clear All</button>
+            </div>
             <div id="queue-list" class="space-y-2 text-sm"></div>
         </div>
 
@@ -73,15 +76,24 @@
 
 <script>
 const APP_NAME = "testa";
-let playlist = [];
+const STORAGE_KEY = "my_app_playlist";
+
+// Load playlist from localStorage on app open
+let playlist = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 let currentTrackIndex = -1;
 
 const audioPlayer = document.getElementById("audio-player");
 
-// Autoplay next track when current one finishes
+// Autoplay next track on end
 audioPlayer.addEventListener("ended", () => {
     playNextTrack();
 });
+
+// Save playlist changes locally
+function savePlaylist() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+    renderQueue();
+}
 
 async function checkInstallStatus() {
     const badge = document.getElementById("status-badge");
@@ -98,7 +110,7 @@ async function checkInstallStatus() {
             badge.textContent = "Installing...";
         }
     } catch (e) {
-        console.error("Status error", e);
+        console.error("Status check failed", e);
     }
 }
 setInterval(checkInstallStatus, 3000);
@@ -122,14 +134,21 @@ async function addTrackToQueue() {
         const data = res.data || res;
 
         if (data.stream_url) {
-            playlist.push(data);
-            input.value = "";
-            status.textContent = "Track added to queue.";
-            renderQueue();
+            // Save metadata and original query for link auto-refreshing
+            playlist.push({
+                query: query,
+                title: data.title,
+                artist: data.artist,
+                thumbnail: data.thumbnail,
+                stream_url: data.stream_url
+            });
 
-            // If nothing is playing, play immediately
+            input.value = "";
+            status.textContent = "Track added to playlist.";
+            savePlaylist();
+
             if (currentTrackIndex === -1) {
-                playTrack(0);
+                playTrack(playlist.length - 1);
             }
         } else {
             status.textContent = res.error || "Could not find stream.";
@@ -162,19 +181,37 @@ function renderQueue() {
     });
 }
 
-function playTrack(index) {
+async function playTrack(index) {
     if (index < 0 || index >= playlist.length) return;
 
     currentTrackIndex = index;
     const track = playlist[index];
+    const status = document.getElementById("player-status");
 
     document.getElementById("now-playing-card").classList.remove("hidden");
     document.getElementById("track-title").textContent = track.title;
     document.getElementById("track-artist").textContent = track.artist;
     document.getElementById("track-thumb").src = track.thumbnail;
 
-    audioPlayer.src = track.stream_url;
-    audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
+    status.textContent = "Refreshing stream link...";
+
+    try {
+        // Automatically request a fresh stream URL in case link expired
+        const response = await fetch(`/runner/api/${APP_NAME}/search_and_stream?query=${encodeURIComponent(track.query)}`);
+        const res = await response.json();
+        const data = res.data || res;
+
+        if (data.stream_url) {
+            track.stream_url = data.stream_url;
+            audioPlayer.src = data.stream_url;
+            audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
+            status.textContent = "Now Playing";
+        } else {
+            status.textContent = "Stream link expired or unreachable.";
+        }
+    } catch (e) {
+        status.textContent = "Error refreshing audio stream.";
+    }
 
     renderQueue();
 }
@@ -200,8 +237,20 @@ function removeTrack(index) {
     } else if (currentTrackIndex > index) {
         currentTrackIndex--;
     }
-    renderQueue();
+    savePlaylist();
 }
+
+function clearPlaylist() {
+    playlist = [];
+    currentTrackIndex = -1;
+    audioPlayer.pause();
+    document.getElementById("now-playing-card").classList.add("hidden");
+    document.getElementById("player-status").textContent = "Queue cleared.";
+    savePlaylist();
+}
+
+// Initial render of saved playlist
+renderQueue();
 </script>
 
 </body>

@@ -1,0 +1,6 @@
+{
+  "name": "Scraper",
+  "description": "Fetches raw HTML from Jumia Kenya using requests",
+  "icon": null,
+  "debug": true
+}

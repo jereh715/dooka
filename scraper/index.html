@@ -79,6 +79,18 @@
     const pathParts = window.location.pathname.split('/');
     const appId = pathParts[2] || 'scraper';
 
+    function handleMissingDependency(result) {
+        if (result && result.requires_installation) {
+            window.parent.postMessage({
+                type: 'MISSING_DEPENDENCY',
+                appName: appId,
+                package_name: result.missing_package
+            }, '*');
+            return true;
+        }
+        return false;
+    }
+
     async function triggerScrape() {
         const btn = document.getElementById('scrape-btn');
         const output = document.getElementById('output');
@@ -98,13 +110,9 @@
 
             const result = await res.json();
 
-            // Intercept dynamic missing package events for runner.py overlay
-            if (res.status === 422 && result.requires_installation) {
-                window.parent.postMessage({
-                    type: 'MISSING_DEPENDENCY',
-                    appName: appId,
-                    package_name: result.missing_package
-                }, '*');
+            // Intercept missing dependency responses (HTTP 422)
+            if (res.status === 422 || handleMissingDependency(result)) {
+                handleMissingDependency(result);
                 btn.disabled = false;
                 btn.innerText = "Retry Fetch";
                 return;
@@ -129,6 +137,21 @@
             btn.innerText = "Fetch Jumia HTML";
         }
     }
+
+    // Ping the app endpoint on load to immediately detect missing packages
+    window.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const res = await fetch(`/runner/api/${appId}/scrape_jumia`, {
+                method: 'GET'
+            });
+            const result = await res.json();
+            if (res.status === 422 || result.requires_installation) {
+                handleMissingDependency(result);
+            }
+        } catch (e) {
+            console.error("Initial dependency check failed:", e);
+        }
+    });
 </script>
 
 </body>

@@ -1,6 +1,6 @@
 {
   "id": "scraper",
-  "name": "scraper",
+  "name": "Scraper",
   "description": "A jumia scraper",
   "version": "1.0.0",
   "main": "index.html",

@@ -1,10 +1,41 @@
-import json
-import requests  # Top-level import triggers ModuleNotFoundError on load in runner.py
+import os
+import sys
+import subprocess
+
+# Define a local vendor directory for packages relative to this miniapp
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOCAL_LIBS_DIR = os.path.join(CURRENT_DIR, "libs")
+
+# Ensure the local library path is added to sys.path
+if LOCAL_LIBS_DIR not in sys.path:
+    sys.path.insert(0, LOCAL_LIBS_DIR)
+
+def ensure_requests_installed():
+    """
+    Checks if requests is importable. If missing, installs it 
+    directly into the local 'libs' directory.
+    """
+    try:
+        import requests
+    except ModuleNotFoundError:
+        os.makedirs(LOCAL_LIBS_DIR, exist_ok=True)
+        # Run pip install targeting the local relative directory
+        cmd = [
+            sys.executable, "-m", "pip", "install",
+            "--target", LOCAL_LIBS_DIR,
+            "requests"
+        ]
+        subprocess.check_call(cmd)
+
+# Auto-run self-installation on script load
+ensure_requests_installed()
+
+import requests  # Now safe to import globally inside this script
+
 
 def scrape_jumia(payload=None):
     """
     Fetches the raw HTML source code from jumia.co.ke using the requests library.
-    Sets standard headers to mimic a valid web browser request.
     """
     url = "https://www.jumia.co.ke/"
     headers = {
@@ -28,6 +59,7 @@ def scrape_jumia(payload=None):
             "status_code": 500,
             "error": str(e)
         }
+
 
 def handle_request(action, payload=None):
     """

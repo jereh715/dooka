@@ -1,6 +1,12 @@
 {
-  "name": "Scraper",
-  "description": "Fetches raw HTML from Jumia Kenya using requests",
-  "icon": null,
-  "debug": true
+  "id": "scraper",
+  "name": "scraper",
+  "description": "A scraper",
+  "version": "1.0.0",
+  "main": "index.html",
+  "icon": "icon.png",
+  "debug": true,
+  "dependencies": [
+    "requests"
+  ]
 }

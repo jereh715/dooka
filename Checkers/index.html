@@ -3,658 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkers vs AI</title>
+    <title>Jumia Scraper</title>
     <style>
-        :root {
-            --bg-color: #121214;
-            --card-bg: #1e1e24;
-            --accent-color: #ff4757;
-            --board-light: #e0d8c3;
-            --board-dark: #70483c;
-            --red-piece: #e84118;
-            --red-piece-dark: #c23616;
-            --black-piece: #2f3640;
-            --black-piece-dark: #1e272e;
-            --highlight: rgba(46, 213, 115, 0.6);
-            --gold: #fbc531;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            user-select: none;
-        }
-
+        * { box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: #f5f6fa;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0d0f17;
+            color: #e1e4ed;
+            margin: 0;
+            padding: 16px;
         }
-
         .container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-            max-width: 600px;
-            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
         }
-
-        header {
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 2.2rem;
-            margin-bottom: 6px;
-            letter-spacing: 1px;
-        }
-
-        .status-panel {
-            background: var(--card-bg);
-            padding: 14px 24px;
+        .card {
+            background: #161925;
+            border: 1px solid #232838;
             border-radius: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+            padding: 16px;
+            margin-bottom: 16px;
         }
-
-        .status-text {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .count-badge {
-            display: flex;
-            gap: 16px;
-            font-size: 0.95rem;
-        }
-
-        .count-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-
-        .dot.red { background-color: var(--red-piece); }
-        .dot.black { background-color: var(--black-piece); border: 1px solid #777; }
-
-        .board-wrapper {
-            position: relative;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+        h2 { margin-top: 0; font-size: 18px; color: #fff; }
+        button {
+            background: #f68b1e; /* Jumia Brand Color */
+            color: white;
+            border: none;
+            padding: 12px 20px;
             border-radius: 8px;
-            overflow: hidden;
-            border: 6px solid #2f3542;
-        }
-
-        #board {
-            display: grid;
-            grid-template-columns: repeat(8, min(11vw, 64px));
-            grid-template-rows: repeat(8, min(11vw, 64px));
-        }
-
-        .square {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-        }
-
-        .square.light {
-            background-color: var(--board-light);
-        }
-
-        .square.dark {
-            background-color: var(--board-dark);
-        }
-
-        .square.selected {
-            background-color: #e1b12c !important;
-        }
-
-        .square.valid-move::after {
-            content: "";
-            width: 25%;
-            height: 25%;
-            background-color: var(--highlight);
-            border-radius: 50%;
-            position: absolute;
-            box-shadow: 0 0 8px var(--highlight);
-        }
-
-        .piece {
-            width: 80%;
-            height: 80%;
-            border-radius: 50%;
+            font-size: 14px;
+            font-weight: 600;
             cursor: pointer;
-            position: relative;
-            transition: transform 0.15s ease;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-shadow: inset 0 -4px 4px rgba(0,0,0,0.4), 0 4px 8px rgba(0,0,0,0.5);
+            width: 100%;
+            transition: opacity 0.2s;
         }
-
-        .piece:hover {
-            transform: scale(1.06);
-        }
-
-        .piece.red {
-            background: radial-gradient(circle at 30% 30%, var(--red-piece), var(--red-piece-dark));
-            border: 2px solid #ff6b81;
-        }
-
-        .piece.black {
-            background: radial-gradient(circle at 30% 30%, #485460, var(--black-piece-dark));
-            border: 2px solid #57606f;
-        }
-
-        .piece.king::before {
-            content: "♔";
-            font-size: 1.8rem;
-            color: var(--gold);
-            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-            line-height: 1;
-        }
-
-        .controls {
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .meta-info {
             display: flex;
             gap: 12px;
+            font-size: 12px;
+            color: #00ff66;
+            margin-top: 10px;
+        }
+        textarea {
             width: 100%;
-        }
-
-        button {
-            flex: 1;
-            padding: 12px;
-            font-size: 1rem;
-            font-weight: 600;
-            border: none;
+            height: 350px;
+            background: #090a0f;
+            color: #7a8499;
+            border: 1px solid #232838;
             border-radius: 8px;
-            cursor: pointer;
-            background-color: var(--card-bg);
-            color: #f5f6fa;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-        }
-
-        button:hover {
-            background-color: #2c2c35;
-            transform: translateY(-2px);
-        }
-
-        button:active {
-            transform: translateY(0);
+            padding: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            resize: vertical;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <header>
-        <h1>Checkers vs AI</h1>
-    </header>
-
-    <div class="status-panel">
-        <div id="status" class="status-text">Your Turn (Red)</div>
-        <div class="count-badge">
-            <div class="count-item"><span class="dot red"></span> Red: <span id="red-count">12</span></div>
-            <div class="count-item"><span class="dot black"></span> Black: <span id="black-count">12</span></div>
-        </div>
+    <div class="card">
+        <h2>Jumia Kenya Scraper</h2>
+        <button id="scrape-btn" onclick="triggerScrape()">Fetch Jumia HTML</button>
+        <div id="meta" class="meta-info"></div>
     </div>
 
-    <div class="board-wrapper">
-        <div id="board"></div>
-    </div>
-
-    <div class="controls">
-        <button id="reset-btn">New Game</button>
+    <div class="card">
+        <h2>HTML Output</h2>
+        <textarea id="output" readonly placeholder="Raw HTML string will appear here..."></textarea>
     </div>
 </div>
 
 <script>
-    // Constants
-    const RED = 'R';
-    const BLACK = 'B';
-    const RED_KING = 'RK';
-    const BLACK_KING = 'BK';
-    const EMPTY = null;
+    // Extracts app ID dynamically from route path (/mini_apps/<app_id>/index.html)
+    const pathParts = window.location.pathname.split('/');
+    const appId = pathParts[2] || 'jumia_scraper';
 
-    let boardState = [];
-    let selectedSquare = null;
-    let validMovesForSelected = [];
-    let currentTurn = RED; // Human is Red, AI is Black
-    let forcedCapturePiece = null; // Used for multi-jump chains
+    async function triggerScrape() {
+        const btn = document.getElementById('scrape-btn');
+        const output = document.getElementById('output');
+        const meta = document.getElementById('meta');
 
-    const boardElement = document.getElementById('board');
-    const statusElement = document.getElementById('status');
-    const redCountElement = document.getElementById('red-count');
-    const blackCountElement = document.getElementById('black-count');
-    const resetBtn = document.getElementById('reset-btn');
+        btn.disabled = true;
+        btn.innerText = "Scraping...";
+        output.value = "Sending request to jumia.co.ke via Python requests...";
+        meta.innerText = "";
 
-    // Initialize Game
-    function initGame() {
-        boardState = Array(8).fill(null).map(() => Array(8).fill(EMPTY));
-        
-        // Setup pieces
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                if ((r + c) % 2 === 1) {
-                    if (r < 3) boardState[r][c] = BLACK;
-                    else if (r > 4) boardState[r][c] = RED;
-                }
-            }
-        }
+        try {
+            const res = await fetch(`/runner/api/${appId}/scrape_jumia`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
 
-        selectedSquare = null;
-        validMovesForSelected = [];
-        currentTurn = RED;
-        forcedCapturePiece = null;
+            const result = await res.json();
 
-        renderBoard();
-        updateStatus();
-    }
-
-    function renderBoard() {
-        boardElement.innerHTML = '';
-        let redCount = 0;
-        let blackCount = 0;
-
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                const square = document.createElement('div');
-                square.classList.add('square');
-                square.classList.add((r + c) % 2 === 1 ? 'dark' : 'light');
-                square.dataset.row = r;
-                square.dataset.col = c;
-
-                const pieceType = boardState[r][c];
-
-                if (pieceType) {
-                    if (pieceType.startsWith(RED)) redCount++;
-                    if (pieceType.startsWith(BLACK)) blackCount++;
-
-                    const piece = document.createElement('div');
-                    piece.classList.add('piece');
-                    piece.classList.add(pieceType.startsWith(RED) ? 'red' : 'black');
-                    if (pieceType.endsWith('K')) piece.classList.add('king');
-                    square.appendChild(piece);
-                }
-
-                // Highlighting
-                if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
-                    square.classList.add('selected');
-                }
-
-                if (validMovesForSelected.some(m => m.toR === r && m.toC === c)) {
-                    square.classList.add('valid-move');
-                }
-
-                square.addEventListener('click', () => handleSquareClick(r, c));
-                boardElement.appendChild(square);
-            }
-        }
-
-        redCountElement.textContent = redCount;
-        blackCountElement.textContent = blackCount;
-    }
-
-    function updateStatus(message) {
-        if (message) {
-            statusElement.textContent = message;
-            return;
-        }
-
-        if (currentTurn === RED) {
-            statusElement.textContent = "Your Turn (Red)";
-        } else {
-            statusElement.textContent = "AI is thinking...";
-        }
-    }
-
-    function handleSquareClick(r, c) {
-        if (currentTurn !== RED) return; // Ignore during AI turn
-
-        const piece = boardState[r][c];
-
-        // If forced capture chain is active, restricting selection to that piece
-        if (forcedCapturePiece) {
-            if (forcedCapturePiece.r !== r || forcedCapturePiece.c !== c) return;
-        }
-
-        // Clicking on own piece
-        if (piece && piece.startsWith(RED)) {
-            const allCaptures = getAllPossibleMoves(boardState, RED).filter(m => m.isJump);
-            
-            // Mandatory jumps rule
-            if (allCaptures.length > 0) {
-                const pieceCaptures = allCaptures.filter(m => m.fromR === r && m.fromC === c);
-                if (pieceCaptures.length === 0) return; // Must select a piece that can jump
-            }
-
-            selectedSquare = { r, c };
-            validMovesForSelected = getMovesForPiece(boardState, r, c);
-            renderBoard();
-            return;
-        }
-
-        // Clicking on a target destination
-        if (selectedSquare) {
-            const move = validMovesForSelected.find(m => m.toR === r && m.toC === c);
-            if (move) {
-                executeMove(move);
-            }
-        }
-    }
-
-    function executeMove(move) {
-        const { fromR, fromC, toR, toC, isJump, jumpR, jumpC } = move;
-
-        boardState[toR][toC] = boardState[fromR][fromC];
-        boardState[fromR][fromC] = EMPTY;
-
-        if (isJump) {
-            boardState[jumpR][jumpC] = EMPTY;
-        }
-
-        // Kinging Check
-        let promoted = false;
-        if (boardState[toR][toC] === RED && toR === 0) {
-            boardState[toR][toC] = RED_KING;
-            promoted = true;
-        } else if (boardState[toR][toC] === BLACK && toR === 7) {
-            boardState[toR][toC] = BLACK_KING;
-            promoted = true;
-        }
-
-        // Multi-jump checking (Ends turn if promoted on landing)
-        if (isJump && !promoted) {
-            const furtherJumps = getMovesForPiece(boardState, toR, toC).filter(m => m.isJump);
-            if (furtherJumps.length > 0) {
-                selectedSquare = { r: toR, c: toC };
-                validMovesForSelected = furtherJumps;
-                forcedCapturePiece = { r: toR, c: toC };
-                renderBoard();
+            // Intercept dynamic dependency request from runner.py
+            if (res.status === 422 && result.requires_installation) {
+                window.parent.postMessage({
+                    type: 'MISSING_DEPENDENCY',
+                    appName: appId,
+                    package_name: result.missing_package
+                }, '*');
+                btn.disabled = false;
+                btn.innerText = "Retry Fetch";
                 return;
             }
-        }
 
-        // End turn reset
-        selectedSquare = null;
-        validMovesForSelected = [];
-        forcedCapturePiece = null;
-
-        // Switch Turn
-        currentTurn = (currentTurn === RED) ? BLACK : RED;
-        renderBoard();
-
-        if (checkGameOver()) return;
-
-        updateStatus();
-
-        if (currentTurn === BLACK) {
-            setTimeout(makeAIMove, 400);
-        }
-    }
-
-    // --- MOVE GENERATION ENGINE ---
-
-    function getMovesForPiece(board, r, c) {
-        const piece = board[r][c];
-        if (!piece) return [];
-
-        const moves = [];
-        const isKing = piece.endsWith('K');
-        const isRed = piece.startsWith(RED);
-
-        let directions = [];
-        if (isKing) {
-            directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
-        } else {
-            directions = isRed ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
-        }
-
-        // Checks captures (jumps) first
-        for (let [dr, dc] of directions) {
-            const midR = r + dr;
-            const midC = c + dc;
-            const landR = r + dr * 2;
-            const landC = c + dc * 2;
-
-            if (isInBounds(landR, landC)) {
-                const midPiece = board[midR][midC];
-                const landPiece = board[landR][landC];
-
-                if (midPiece && !isSameTeam(piece, midPiece) && landPiece === EMPTY) {
-                    moves.push({
-                        fromR: r, fromC: c,
-                        toR: landR, toC: landC,
-                        isJump: true,
-                        jumpR: midR, jumpC: midC
-                    });
-                }
-            }
-        }
-
-        // Standard step moves
-        if (moves.length === 0) {
-            for (let [dr, dc] of directions) {
-                const nextR = r + dr;
-                const nextC = c + dc;
-
-                if (isInBounds(nextR, nextC) && board[nextR][nextC] === EMPTY) {
-                    moves.push({
-                        fromR: r, fromC: c,
-                        toR: nextR, toC: nextC,
-                        isJump: false
-                    });
-                }
-            }
-        }
-
-        return moves;
-    }
-
-    function getAllPossibleMoves(board, player) {
-        let moves = [];
-        let hasJumps = false;
-
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                const piece = board[r][c];
-                if (piece && piece.startsWith(player)) {
-                    const pieceMoves = getMovesForPiece(board, r, c);
-                    const jumps = pieceMoves.filter(m => m.isJump);
-
-                    if (jumps.length > 0) {
-                        if (!hasJumps) {
-                            moves = []; // Discard simple moves once a jump is found
-                            hasJumps = true;
-                        }
-                        moves.push(...jumps);
-                    } else if (!hasJumps) {
-                        moves.push(...pieceMoves);
-                    }
-                }
-            }
-        }
-
-        return moves;
-    }
-
-    function isInBounds(r, c) {
-        return r >= 0 && r < 8 && c >= 0 && c < 8;
-    }
-
-    function isSameTeam(p1, p2) {
-        if (!p1 || !p2) return false;
-        return p1[0] === p2[0];
-    }
-
-    function checkGameOver() {
-        const redMoves = getAllPossibleMoves(boardState, RED);
-        const blackMoves = getAllPossibleMoves(boardState, BLACK);
-
-        let redPieces = 0, blackPieces = 0;
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                if (boardState[r][c]?.startsWith(RED)) redPieces++;
-                if (boardState[r][c]?.startsWith(BLACK)) blackPieces++;
-            }
-        }
-
-        if (redPieces === 0 || redMoves.length === 0) {
-            updateStatus("AI Wins! Better luck next time.");
-            return true;
-        }
-
-        if (blackPieces === 0 || blackMoves.length === 0) {
-            updateStatus("You Win! Great job!");
-            return true;
-        }
-
-        return false;
-    }
-
-    // --- AI MINIMAX ENGINE ---
-
-    function makeAIMove() {
-        const bestMove = getBestMoveMinimax(boardState, 4);
-        if (bestMove) {
-            executeMove(bestMove);
-        } else {
-            checkGameOver();
-        }
-    }
-
-    function getBestMoveMinimax(board, depth) {
-        let bestValue = -Infinity;
-        let bestMoves = [];
-
-        const possibleMoves = getAllPossibleMoves(board, BLACK);
-
-        for (let move of possibleMoves) {
-            const nextBoard = cloneBoard(board);
-            simulateMove(nextBoard, move);
-
-            const value = minimax(nextBoard, depth - 1, -Infinity, Infinity, false);
-
-            if (value > bestValue) {
-                bestValue = value;
-                bestMoves = [move];
-            } else if (value === bestValue) {
-                bestMoves.push(move);
-            }
-        }
-
-        if (bestMoves.length === 0) return null;
-        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
-    }
-
-    function minimax(board, depth, alpha, beta, isMaximizing) {
-        if (depth === 0) {
-            return evaluateBoard(board);
-        }
-
-        if (isMaximizing) {
-            let maxEval = -Infinity;
-            const moves = getAllPossibleMoves(board, BLACK);
-            if (moves.length === 0) return -1000;
-
-            for (let move of moves) {
-                const nextBoard = cloneBoard(board);
-                simulateMove(nextBoard, move);
-                const evaluation = minimax(nextBoard, depth - 1, alpha, beta, false);
-                maxEval = Math.max(maxEval, evaluation);
-                alpha = Math.max(alpha, evaluation);
-                if (beta <= alpha) break;
-            }
-            return maxEval;
-        } else {
-            let minEval = Infinity;
-            const moves = getAllPossibleMoves(board, RED);
-            if (moves.length === 0) return 1000;
-
-            for (let move of moves) {
-                const nextBoard = cloneBoard(board);
-                simulateMove(nextBoard, move);
-                const evaluation = minimax(nextBoard, depth - 1, alpha, beta, true);
-                minEval = Math.min(minEval, evaluation);
-                beta = Math.min(beta, evaluation);
-                if (beta <= alpha) break;
-            }
-            return minEval;
-        }
-    }
-
-    function simulateMove(board, move) {
-        const { fromR, fromC, toR, toC, isJump, jumpR, jumpC } = move;
-        board[toR][toC] = board[fromR][fromC];
-        board[fromR][fromC] = EMPTY;
-
-        if (isJump) {
-            board[jumpR][jumpC] = EMPTY;
-        }
-
-        // King promotion
-        if (board[toR][toC] === BLACK && toR === 7) board[toR][toC] = BLACK_KING;
-        if (board[toR][toC] === RED && toR === 0) board[toR][toC] = RED_KING;
-    }
-
-    function evaluateBoard(board) {
-        let score = 0;
-
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                const piece = board[r][c];
-                if (!piece) continue;
-
-                let pieceValue = 10;
-                if (piece.endsWith('K')) pieceValue = 18;
-
-                let positionBonus = 0;
-                if (c >= 2 && c <= 5 && r >= 2 && r <= 5) positionBonus += 2;
-                if (piece === BLACK) positionBonus += (r * 1);
-                if (piece === RED) positionBonus += ((7 - r) * 1);
-
-                const total = pieceValue + positionBonus;
-
-                if (piece.startsWith(BLACK)) {
-                    score += total;
+            if (result.success && result.data) {
+                const data = result.data;
+                if (data.error) {
+                    output.value = "Error: " + data.error;
                 } else {
-                    score -= total;
+                    meta.innerText = `Status: ${data.status_code} | Bytes: ${data.length}`;
+                    output.value = data.html;
                 }
+            } else {
+                output.value = "Failed: " + (result.error || "Unknown execution error");
             }
+
+        } catch (err) {
+            output.value = "Execution Exception: " + err.message;
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Fetch Jumia HTML";
         }
-
-        return score;
     }
-
-    function cloneBoard(board) {
-        return board.map(row => [...row]);
-    }
-
-    // Reset Listener
-    resetBtn.addEventListener('click', initGame);
-
-    // Launch
-    initGame();
 </script>
+
 </body>
 </html>

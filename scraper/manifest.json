@@ -1,0 +1,6 @@
+{
+  "name": "Jumia Scraper",
+  "description": "Scrapes raw web source code from jumia.co.ke using requests.",
+  "icon": null,
+  "debug": true
+}

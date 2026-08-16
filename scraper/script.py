@@ -1,12 +1,11 @@
 import json
+import requests  # Top-level import triggers ModuleNotFoundError on load in runner.py
 
 def scrape_jumia(payload=None):
     """
     Fetches the raw HTML source code from jumia.co.ke using the requests library.
     Sets standard headers to mimic a valid web browser request.
     """
-    import requests  # Dynamic dependency handled by runner.py
-
     url = "https://www.jumia.co.ke/"
     headers = {
         "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36",

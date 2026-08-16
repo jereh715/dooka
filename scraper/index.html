@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jumia Scraper</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0d0f17;
+            color: #e1e4ed;
+            margin: 0;
+            padding: 16px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #161925;
+            border: 1px solid #232838;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        h2 { margin-top: 0; font-size: 18px; color: #fff; }
+        button {
+            background: #f68b1e;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: opacity 0.2s;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .meta-info {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #00ff66;
+            margin-top: 10px;
+        }
+        textarea {
+            width: 100%;
+            height: 350px;
+            background: #090a0f;
+            color: #7a8499;
+            border: 1px solid #232838;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            resize: vertical;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h2>Jumia Kenya Scraper</h2>
+        <button id="scrape-btn" onclick="triggerScrape()">Fetch Jumia HTML</button>
+        <div id="meta" class="meta-info"></div>
+    </div>
+
+    <div class="card">
+        <h2>HTML Output</h2>
+        <textarea id="output" readonly placeholder="Raw HTML string will appear here..."></textarea>
+    </div>
+</div>
+
+<script>
+    // Extract app ID dynamically from route URL path (/mini_apps/<app_id>/index.html)
+    const pathParts = window.location.pathname.split('/');
+    const appId = pathParts[2] || 'scraper';
+
+    async function triggerScrape() {
+        const btn = document.getElementById('scrape-btn');
+        const output = document.getElementById('output');
+        const meta = document.getElementById('meta');
+
+        btn.disabled = true;
+        btn.innerText = "Scraping...";
+        output.value = "Sending request to jumia.co.ke via Python requests...";
+        meta.innerText = "";
+
+        try {
+            const res = await fetch(`/runner/api/${appId}/scrape_jumia`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+
+            const result = await res.json();
+
+            // Intercept dynamic missing package events for runner.py overlay
+            if (res.status === 422 && result.requires_installation) {
+                window.parent.postMessage({
+                    type: 'MISSING_DEPENDENCY',
+                    appName: appId,
+                    package_name: result.missing_package
+                }, '*');
+                btn.disabled = false;
+                btn.innerText = "Retry Fetch";
+                return;
+            }
+
+            if (result.success && result.data) {
+                const data = result.data;
+                if (data.error) {
+                    output.value = "Error: " + data.error;
+                } else {
+                    meta.innerText = `Status: ${data.status_code} | Bytes: ${data.length}`;
+                    output.value = data.html;
+                }
+            } else {
+                output.value = "Failed: " + (result.error || "Unknown execution error");
+            }
+
+        } catch (err) {
+            output.value = "Execution Exception: " + err.message;
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Fetch Jumia HTML";
+        }
+    }
+</script>
+
+</body>
+</html>

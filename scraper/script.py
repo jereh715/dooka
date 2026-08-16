@@ -1,41 +1,59 @@
 import os
 import sys
-import subprocess
 
-# Define a local vendor directory for packages relative to this miniapp
+# Define local vendor directory relative to miniapp
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOCAL_LIBS_DIR = os.path.join(CURRENT_DIR, "libs")
 
-# Ensure the local library path is added to sys.path
 if LOCAL_LIBS_DIR not in sys.path:
     sys.path.insert(0, LOCAL_LIBS_DIR)
 
-def ensure_requests_installed():
+def install_via_pip(package_name):
     """
-    Checks if requests is importable. If missing, installs it 
-    directly into the local 'libs' directory.
+    Attempts programmatic pip installation into the local 'libs' folder,
+    handling Android/Chaquopy environments where subprocess is restricted.
     """
+    os.makedirs(LOCAL_LIBS_DIR, exist_ok=True)
+    
+    # Method 1: Standard Subprocess (Desktop/Linux/macOS)
     try:
-        import requests
-    except ModuleNotFoundError:
-        os.makedirs(LOCAL_LIBS_DIR, exist_ok=True)
-        # Run pip install targeting the local relative directory
+        import subprocess
         cmd = [
             sys.executable, "-m", "pip", "install",
             "--target", LOCAL_LIBS_DIR,
-            "requests"
+            package_name
         ]
         subprocess.check_call(cmd)
+        return True
+    except Exception as e:
+        print(f"[PIP SUBPROCESS FAILED]: {e}")
 
-# Auto-run self-installation on script load
-ensure_requests_installed()
+    # Method 2: In-Process Pip Fallback (Android / Chaquopy)
+    try:
+        from pip._internal.cli.main import main as pip_main
+        pip_main(['install', '--target', LOCAL_LIBS_DIR, package_name])
+        return True
+    except Exception as e:
+        print(f"[PIP IN-PROCESS FAILED]: {e}")
 
-import requests  # Now safe to import globally inside this script
+    return False
+
+
+# Safe import wrapper
+try:
+    import requests
+except ModuleNotFoundError:
+    print("[SCRIPT] 'requests' not found. Attempting local installation...")
+    if install_via_pip("requests"):
+        importlib_invalidate = getattr(os, 'sync', None)
+        import requests
+    else:
+        raise ModuleNotFoundError("Could not auto-install 'requests' via local pip.")
 
 
 def scrape_jumia(payload=None):
     """
-    Fetches the raw HTML source code from jumia.co.ke using the requests library.
+    Fetches raw HTML source code from jumia.co.ke.
     """
     url = "https://www.jumia.co.ke/"
     headers = {

@@ -1,12 +1,1 @@
-{
-  "id": "scraper",
-  "name": "scraper",
-  "description": "A scraper",
-  "version": "1.0.0",
-  "main": "index.html",
-  "icon": "icon.png",
-  "debug": true,
-  "dependencies": [
-    "requests"
-  ]
-}
+

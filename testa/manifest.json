@@ -1,7 +1,7 @@
 {
   "id": "testa",
   "name": "Testa",
-  "description": "A lightweight local & streaming music player powered by yt-dlp.",
+  "description": "mokimo",
   "version": "1.0.0",
   "main": "index.html",
   "icon": "icon.png",

@@ -1,6 +1,12 @@
 {
-  "name": "Jumia Scraper",
-  "description": "Scrapes raw web source code from jumia.co.ke using requests.",
-  "icon": null,
-  "debug": true
+  "id": "scraper",
+  "name": "scraper",
+  "description": "A jumia scraper",
+  "version": "1.0.0",
+  "main": "index.html",
+  "icon": "icon.png",
+  "debug": true,
+  "dependencies": [
+    "requests"
+  ]
 }

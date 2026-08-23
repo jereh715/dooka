@@ -1,65 +1,65 @@
 import os
 import sys
+import tempfile
+import zipfile
+import urllib.request
 import importlib
 
-# 1. Setup local vendor path
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-LOCAL_LIBS_DIR = os.path.join(CURRENT_DIR, "libs")
+# Create a temporary directory for runtime dependencies
+TEMP_LIBS_DIR = os.path.join(tempfile.gettempdir(), "miniapp_temp_libs")
+os.makedirs(TEMP_LIBS_DIR, exist_ok=True)
 
-if LOCAL_LIBS_DIR not in sys.path:
-    sys.path.insert(0, LOCAL_LIBS_DIR)
+if TEMP_LIBS_DIR not in sys.path:
+    sys.path.insert(0, TEMP_LIBS_DIR)
 
-def install_via_pip(package_name):
+def download_and_extract(url, target_dir):
     """
-    Programmatic pip installer designed for cross-platform (Desktop + Android/Chaquopy).
+    Downloads a pure-Python package archive (wheel/zip) and extracts it directly into target_dir.
     """
-    os.makedirs(LOCAL_LIBS_DIR, exist_ok=True)
-    
-    # Method 1: Subprocess (Desktop / Linux / macOS)
     try:
-        import subprocess
-        cmd = [
-            sys.executable, "-m", "pip", "install",
-            "--target", LOCAL_LIBS_DIR,
-            package_name
-        ]
-        subprocess.check_call(cmd)
-        importlib.invalidate_caches()
-        return True
-    except Exception as e:
-        print(f"[PIP SUBPROCESS FAILED]: {e}")
-
-    # Method 2: In-Process Fallback via runpy (Android / Chaquopy safe)
-    try:
-        import runpy
-        # Prevents sys.exit() from killing the Python runtime
-        sys.argv = ['pip', 'install', '--target', LOCAL_LIBS_DIR, package_name]
-        runpy.run_module('pip', run_name='__main__')
+        archive_path = os.path.join(target_dir, "package.zip")
+        headers = {"User-Agent": "Mozilla/5.0"}
+        req = urllib.request.Request(url, headers=headers)
         
+        with urllib.request.urlopen(req) as response, open(archive_path, "wb") as out_file:
+            out_file.write(response.read())
+
+        with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+            zip_ref.extractall(target_dir)
+
+        if os.path.exists(archive_path):
+            os.remove(archive_path)
+
         importlib.invalidate_caches()
         return True
-    except SystemExit as e:
-        # pip run_module will trigger SystemExit(0) on success
-        if e.code == 0:
-            importlib.invalidate_caches()
-            return True
-        print(f"[PIP RUNPY SYSTEMEXIT]: Failed with code {e.code}")
     except Exception as e:
-        print(f"[PIP IN-PROCESS FAILED]: {e}")
+        print(f"[TEMP DOWNLOAD FAILED]: {e}")
+        return False
 
-    return False
-
-
-# Safe import execution
-try:
-    import requests
-except ModuleNotFoundError:
-    print("[SCRIPT] 'requests' not found. Attempting local installation...")
-    if install_via_pip("requests"):
+def ensure_temp_dependencies():
+    """
+    Ensures 'requests' and its required dependencies (urllib3, idna, chardet, certifi) 
+    are extracted into the temp directory.
+    """
+    try:
         import requests
-    else:
-        raise ModuleNotFoundError("Could not auto-install 'requests' via local pip.")
+    except ModuleNotFoundError:
+        print("[SCRIPT] 'requests' missing. Fetching pure-Python wheels into temp folder...")
+        
+        # Direct PyPI pure-python wheel URLs for requests & core dependencies
+        deps = [
+            "https://files.pythonhosted.org/packages/b2/b0/cd80327f17105a396417772346761184a1e94119d554a7375a02ad9d9354/certifi-2024.7.4-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/63/81/c465d0b05f0a1e05d97f2277d7f78c85741630b91e1beed85c9ec60a95ff/idna-3.8-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/c8/2d/e05b5832a514d1f2e46b96b3a0335759166fbc4b24e6503c15d487f87a87/charset_normalizer-3.3.2-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/ca/1c/7700a0b019f396e9447dd0a61ef87a4df1465bf1aa907ee6416bfb43ddac/urllib3-2.2.2-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/f9/9b/335f943883391b01d5964f434b9d0739c0fa46487e47ef66ef0d84d1fa34/requests-2.32.3-py3-none-any.whl"
+        ]
+        
+        for dep_url in deps:
+            download_and_extract(dep_url, TEMP_LIBS_DIR)
 
+ensure_temp_dependencies()
+import requests
 
 def scrape_jumia(payload=None):
     """
@@ -87,7 +87,6 @@ def scrape_jumia(payload=None):
             "status_code": 500,
             "error": str(e)
         }
-
 
 def handle_request(action, payload=None):
     """

@@ -1,12 +1,14 @@
 import os
 import sys
-import tempfile
 import zipfile
 import urllib.request
 import importlib
 
-# Create a temporary directory for runtime dependencies
-TEMP_LIBS_DIR = os.path.join(tempfile.gettempdir(), "miniapp_temp_libs")
+# 1. Store temporary libraries directly in the script's local folder
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMP_LIBS_DIR = os.path.join(CURRENT_DIR, "libs")
+
+# Ensure target directory exists
 os.makedirs(TEMP_LIBS_DIR, exist_ok=True)
 
 if TEMP_LIBS_DIR not in sys.path:
@@ -33,20 +35,19 @@ def download_and_extract(url, target_dir):
         importlib.invalidate_caches()
         return True
     except Exception as e:
-        print(f"[TEMP DOWNLOAD FAILED]: {e}")
+        print(f"[DOWNLOAD FAILED]: {e}")
         return False
 
-def ensure_temp_dependencies():
+def ensure_dependencies():
     """
     Ensures 'requests' and its required dependencies (urllib3, idna, chardet, certifi) 
-    are extracted into the temp directory.
+    are extracted into the local libs directory.
     """
     try:
         import requests
     except ModuleNotFoundError:
-        print("[SCRIPT] 'requests' missing. Fetching pure-Python wheels into temp folder...")
+        print("[SCRIPT] 'requests' missing. Downloading wheels to local libs folder...")
         
-        # Direct PyPI pure-python wheel URLs for requests & core dependencies
         deps = [
             "https://files.pythonhosted.org/packages/b2/b0/cd80327f17105a396417772346761184a1e94119d554a7375a02ad9d9354/certifi-2024.7.4-py3-none-any.whl",
             "https://files.pythonhosted.org/packages/63/81/c465d0b05f0a1e05d97f2277d7f78c85741630b91e1beed85c9ec60a95ff/idna-3.8-py3-none-any.whl",
@@ -58,7 +59,7 @@ def ensure_temp_dependencies():
         for dep_url in deps:
             download_and_extract(dep_url, TEMP_LIBS_DIR)
 
-ensure_temp_dependencies()
+ensure_dependencies()
 import requests
 
 def scrape_jumia(payload=None):

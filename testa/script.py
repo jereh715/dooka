@@ -1,18 +1,17 @@
 import os
 import sys
-import tempfile
 import threading
 import zipfile
 import urllib.request
+import importlib
 
-# Setup writable storage paths
-BASE_TEMP = tempfile.gettempdir()
-LOCAL_LIB_DIR = os.path.join(BASE_TEMP, "libs")
-DOWNLOAD_DIR = os.path.join(BASE_TEMP, "audio_downloads")
+# 1. Store storage paths relative to script directory (bypasses tempfile crash)
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOCAL_LIB_DIR = os.path.join(CURRENT_DIR, "libs")
+DOWNLOAD_DIR = os.path.join(CURRENT_DIR, "audio_downloads")
 
 for folder in [LOCAL_LIB_DIR, DOWNLOAD_DIR]:
-    if not os.path.exists(folder):
-        os.makedirs(folder, exist_ok=True)
+    os.makedirs(folder, exist_ok=True)
 
 if LOCAL_LIB_DIR not in sys.path:
     sys.path.insert(0, LOCAL_LIB_DIR)
@@ -29,18 +28,31 @@ def install_ytdlp_background():
     INSTALLATION_STATUS["is_installing"] = True
     INSTALLATION_STATUS["message"] = "Downloading yt-dlp..."
 
+    # Method 1: In-Process Fallback via runpy (Android / Chaquopy safe)
     try:
-        import pip
-        pip.main(['install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet'])
+        import runpy
+        sys.argv = ['pip', 'install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet']
+        runpy.run_module('pip', run_name='__main__')
+        
+        importlib.invalidate_caches()
         import yt_dlp
         INSTALLATION_STATUS["is_installed"] = True
         INSTALLATION_STATUS["is_installing"] = False
         INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
         return
-    except Exception:
-        INSTALLATION_STATUS["message"] = "Downloading wheel archive..."
+    except SystemExit as e:
+        if e.code == 0:
+            importlib.invalidate_caches()
+            INSTALLATION_STATUS["is_installed"] = True
+            INSTALLATION_STATUS["is_installing"] = False
+            INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
+            return
+    except Exception as e1:
+        print(f"[RUNPY PIP FAILED]: {e1}")
 
+    # Method 2: Direct Zip Download Fallback
     try:
+        INSTALLATION_STATUS["message"] = "Downloading zip archive..."
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
         target_zip = os.path.join(LOCAL_LIB_DIR, "yt_dlp_zip.zip")
         urllib.request.urlretrieve(url, target_zip)
@@ -48,9 +60,10 @@ def install_ytdlp_background():
         with zipfile.ZipFile(target_zip, 'r') as zip_ref:
             zip_ref.extractall(LOCAL_LIB_DIR)
 
-        if LOCAL_LIB_DIR not in sys.path:
-            sys.path.insert(0, LOCAL_LIB_DIR)
+        if os.path.exists(target_zip):
+            os.remove(target_zip)
 
+        importlib.invalidate_caches()
         import yt_dlp
         INSTALLATION_STATUS["is_installed"] = True
         INSTALLATION_STATUS["is_installing"] = False
@@ -78,10 +91,6 @@ def get_install_status(params=None):
     return INSTALLATION_STATUS
 
 def stream_and_trigger_download(params=None):
-    """
-    Returns immediate stream URL for playback AND triggers 
-    a silent background thread to download the low-quality track.
-    """
     if not check_or_start_install():
         return {"error": f"yt-dlp not ready: {INSTALLATION_STATUS['message']}"}
 
@@ -112,13 +121,11 @@ def stream_and_trigger_download(params=None):
             file_name = f"{video_id}.{ext}"
             file_path = os.path.join(DOWNLOAD_DIR, file_name)
 
-            # Check if file already exists locally
             is_saved = os.path.exists(file_path)
 
             if not stream_url and not is_saved:
                 return {"error": "No playable stream found."}
 
-            # Trigger silent download in background if not already saved
             if not is_saved:
                 thread = threading.Thread(target=_silent_download_worker, args=(query, file_path))
                 thread.daemon = True
@@ -139,7 +146,6 @@ def stream_and_trigger_download(params=None):
         return {"error": f"Extraction error: {str(e)}"}
 
 def _silent_download_worker(query, target_path):
-    """Worker function for silent background downloading."""
     import yt_dlp
     ydl_opts = {
         'format': 'worstaudio[ext=webm]/worstaudio[ext=m4a]/worstaudio/worst',
@@ -157,14 +163,12 @@ def _silent_download_worker(query, target_path):
         print(f"Background download failed for {query}: {e}")
 
 def check_file_status(params=None):
-    """Polls whether the silent background download completed."""
     if not params or not params.get("file_name"):
         return {"is_saved": False}
     file_path = os.path.join(DOWNLOAD_DIR, params.get("file_name"))
     return {"is_saved": os.path.exists(file_path)}
 
 def delete_local_file(params=None):
-    """Deletes the locally downloaded file."""
     if not params or not params.get("file"):
         return {"error": "No file name provided."}
     

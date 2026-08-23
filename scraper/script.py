@@ -1,7 +1,8 @@
 import os
 import sys
+import importlib
 
-# Define local vendor directory relative to miniapp
+# 1. Setup local vendor path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOCAL_LIBS_DIR = os.path.join(CURRENT_DIR, "libs")
 
@@ -10,12 +11,11 @@ if LOCAL_LIBS_DIR not in sys.path:
 
 def install_via_pip(package_name):
     """
-    Attempts programmatic pip installation into the local 'libs' folder,
-    handling Android/Chaquopy environments where subprocess is restricted.
+    Programmatic pip installer designed for cross-platform (Desktop + Android/Chaquopy).
     """
     os.makedirs(LOCAL_LIBS_DIR, exist_ok=True)
     
-    # Method 1: Standard Subprocess (Desktop/Linux/macOS)
+    # Method 1: Subprocess (Desktop / Linux / macOS)
     try:
         import subprocess
         cmd = [
@@ -24,28 +24,38 @@ def install_via_pip(package_name):
             package_name
         ]
         subprocess.check_call(cmd)
+        importlib.invalidate_caches()
         return True
     except Exception as e:
         print(f"[PIP SUBPROCESS FAILED]: {e}")
 
-    # Method 2: In-Process Pip Fallback (Android / Chaquopy)
+    # Method 2: In-Process Fallback via runpy (Android / Chaquopy safe)
     try:
-        from pip._internal.cli.main import main as pip_main
-        pip_main(['install', '--target', LOCAL_LIBS_DIR, package_name])
+        import runpy
+        # Prevents sys.exit() from killing the Python runtime
+        sys.argv = ['pip', 'install', '--target', LOCAL_LIBS_DIR, package_name]
+        runpy.run_module('pip', run_name='__main__')
+        
+        importlib.invalidate_caches()
         return True
+    except SystemExit as e:
+        # pip run_module will trigger SystemExit(0) on success
+        if e.code == 0:
+            importlib.invalidate_caches()
+            return True
+        print(f"[PIP RUNPY SYSTEMEXIT]: Failed with code {e.code}")
     except Exception as e:
         print(f"[PIP IN-PROCESS FAILED]: {e}")
 
     return False
 
 
-# Safe import wrapper
+# Safe import execution
 try:
     import requests
 except ModuleNotFoundError:
     print("[SCRIPT] 'requests' not found. Attempting local installation...")
     if install_via_pip("requests"):
-        importlib_invalidate = getattr(os, 'sync', None)
         import requests
     else:
         raise ModuleNotFoundError("Could not auto-install 'requests' via local pip.")

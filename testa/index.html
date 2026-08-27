@@ -3,78 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hybrid Stream & Silent Download Player</title>
+    <title>Web Music Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #0d1117; color: #c9d1d9; font-family: system-ui, sans-serif; }
+        body { background-color: #000000; color: #b3b3b3; font-family: system-ui, -apple-system, sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #282828; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3e3e3e; }
     </style>
 </head>
-<body class="p-4 flex flex-col min-h-screen">
+<body class="h-screen flex flex-col overflow-hidden select-none">
 
-    <div class="max-w-xl mx-auto w-full space-y-4">
+    <!-- Top & Main Container -->
+    <div class="flex-1 flex overflow-hidden p-2 gap-2">
 
-        <!-- Header -->
-        <div class="border-b border-gray-800 pb-3 flex justify-between items-center">
-            <div>
-                <h1 class="text-xl font-bold text-white">⚡ Instant Stream & Auto-Vault</h1>
-                <p class="text-xs text-gray-500">Streams instantly + saves low-data copy silently</p>
-            </div>
-            <div id="status-badge" class="text-xs px-2 py-1 rounded bg-gray-800 text-gray-400">
-                Checking...
-            </div>
-        </div>
-
-        <!-- Search Bar -->
-        <div class="flex gap-2">
-            <input 
-                type="text" 
-                id="search-input" 
-                placeholder="Search song to play & save..." 
-                class="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500 w-full"
-                onkeydown="if(event.key === 'Enter') addAndPlayTrack()"
-            />
-            <button 
-                id="add-btn"
-                onclick="addAndPlayTrack()" 
-                class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-semibold text-white transition-colors whitespace-nowrap"
-            >
-                ▶ Play
-            </button>
-        </div>
-
-        <!-- Active Player -->
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
-            <div id="player-status" class="text-xs text-gray-500 text-center py-2">
-                Queue is empty.
-            </div>
-
-            <div id="now-playing-card" class="hidden flex items-center gap-3">
-                <img id="track-thumb" src="" class="w-12 h-12 object-cover rounded bg-gray-800" />
-                <div class="overflow-hidden flex-1">
-                    <h2 id="track-title" class="text-white font-semibold text-sm truncate">---</h2>
-                    <p id="track-artist" class="text-xs text-gray-400 truncate">---</p>
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-[#121212] rounded-lg p-4 flex flex-col justify-between shrink-0 hidden md:flex">
+            <div class="space-y-6">
+                <!-- Spotify-like Logo area -->
+                <div class="flex items-center gap-2 text-white font-bold text-lg px-2">
+                    <svg class="w-7 h-7 text-[#1db954]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0C5.376 0 0 5.376 0 12s5.376 12 12 12 12-5.376 12-12S18.624 0 12 0zm5.521 17.341c-.219.359-.691.475-1.049.257-2.868-1.753-6.478-2.15-10.732-1.178-.403.092-.806-.164-.899-.567-.093-.403.164-.806.567-.899 4.656-1.064 8.653-.611 11.855 1.348.358.218.474.69.258 1.039zm1.474-3.277c-.276.448-.868.591-1.316.315-3.282-2.016-8.288-2.602-12.172-1.423-.505.153-1.037-.134-1.19-.639-.153-.505.134-1.037.639-1.19 4.437-1.347 9.947-.7 13.724 1.621.448.276.591.868.315 1.316zm.126-3.416C15.228 8.441 8.8 8.225 5.12 9.342c-.611.186-1.258-.168-1.444-.778-.186-.611.168-1.258.778-1.444 4.228-1.284 11.31-1.03 15.861 1.673.551.327.733 1.039.406 1.59-.327.551-1.039.733-1.59.406z"/>
+                    </svg>
+                    <span>Player</span>
                 </div>
-                <div id="playback-source" class="text-[10px] px-2 py-1 rounded bg-gray-800 text-gray-400 whitespace-nowrap">
-                    ---
+
+                <nav class="space-y-4 text-sm font-semibold">
+                    <a href="#" class="flex items-center gap-4 text-white hover:text-white transition px-2">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                        Home
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Silent System Status Widget -->
+            <div class="bg-[#181818] p-3 rounded-md text-xs border border-[#282828] space-y-1">
+                <div class="flex items-center justify-between text-gray-400">
+                    <span>Engine</span>
+                    <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
                 </div>
+                <div id="status-text" class="text-white font-medium truncate">Checking setup...</div>
             </div>
+        </aside>
 
-            <audio id="audio-player" controls class="w-full">
-                Your browser does not support audio playback.
-            </audio>
-        </div>
+        <!-- Main Content Panel -->
+        <main class="flex-1 bg-[#121212] rounded-lg flex flex-col overflow-hidden">
 
-        <!-- Playlist -->
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-2">
-            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">
-                    Playlist (<span id="queue-count">0</span>)
-                </h3>
+            <!-- Sticky Top Bar / Search -->
+            <header class="p-4 bg-[#121212]/90 backdrop-blur border-b border-[#282828]/50 flex items-center justify-between gap-4">
+                <div class="relative flex-1 max-w-md">
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        placeholder="What do you want to play?" 
+                        class="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white text-sm rounded-full pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-white/20 transition placeholder-gray-400"
+                        onkeydown="if(event.key === 'Enter') addAndPlayTrack()"
+                    />
+                </div>
+                <button 
+                    id="add-btn"
+                    onclick="addAndPlayTrack()" 
+                    class="bg-[#1db954] hover:scale-105 active:scale-95 text-black font-bold text-sm px-6 py-2.5 rounded-full transition-all flex items-center gap-2"
+                >
+                    Play
+                </button>
+            </header>
+
+            <!-- Scrollable Track Queue -->
+            <div class="flex-1 overflow-y-auto p-6">
+                <div class="flex justify-between items-end mb-4">
+                    <h2 class="text-white text-xl font-bold tracking-tight">Queue</h2>
+                    <span class="text-xs text-gray-400 font-semibold"><span id="queue-count">0</span> tracks</span>
+                </div>
+
+                <!-- Table Header -->
+                <div class="grid grid-cols-[16px_1fr_auto_auto] gap-4 px-4 py-2 text-xs font-semibold text-gray-400 border-b border-[#282828] mb-2">
+                    <span>#</span>
+                    <span>Title</span>
+                    <span class="text-right">Cache Status</span>
+                    <span class="w-6"></span>
+                </div>
+
+                <!-- Track List -->
+                <div id="queue-list" class="space-y-1"></div>
             </div>
-            <div id="queue-list" class="space-y-2 text-sm"></div>
-        </div>
-
+        </main>
     </div>
+
+    <!-- Bottom Player Bar -->
+    <footer class="h-24 bg-black border-t border-[#282828] px-4 flex items-center justify-between shrink-0">
+        
+        <!-- Track Details -->
+        <div class="flex items-center gap-3 w-1/4 min-w-[180px]">
+            <img id="track-thumb" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E" class="w-14 h-14 object-cover rounded bg-[#282828] shrink-0" />
+            <div class="overflow-hidden">
+                <h4 id="track-title" class="text-white text-sm font-semibold truncate">Select a track</h4>
+                <p id="track-artist" class="text-xs text-gray-400 truncate">---</p>
+            </div>
+        </div>
+
+        <!-- Custom Audio Controls Center -->
+        <div class="flex flex-col items-center gap-2 w-2/4 max-w-xl">
+            <div class="flex items-center gap-6">
+                <!-- Simple playback controls styling -->
+                <button onclick="playPreviousTrack()" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </button>
+                <button id="master-play-btn" onclick="togglePlayPause()" class="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition">
+                    <svg id="play-icon" class="w-4 h-4 translate-x-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg id="pause-icon" class="w-4 h-4 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                <button onclick="playNextTrack()" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                </button>
+            </div>
+
+            <!-- Native Audio Control Bridge -->
+            <div class="w-full flex items-center gap-2">
+                <span id="current-time" class="text-[11px] text-gray-400 w-8 text-right">0:00</span>
+                <input type="range" id="seek-bar" value="0" min="0" max="100" class="w-full h-1 bg-[#4d4d4d] rounded-lg appearance-none cursor-pointer accent-white hover:accent-[#1db954]" oninput="seekAudio(this.value)" />
+                <span id="total-duration" class="text-[11px] text-gray-400 w-8">0:00</span>
+            </div>
+        </div>
+
+        <!-- Right Side Placeholder / Engine badge -->
+        <div class="w-1/4 flex justify-end items-center gap-2">
+            <span id="source-indicator" class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-[#282828] text-gray-400 font-bold hidden">
+                Ready
+            </span>
+        </div>
+
+        <!-- Hidden Audio Element -->
+        <audio id="audio-player" class="hidden"></audio>
+    </footer>
 
 <script>
 const APP_NAME = "testa";
@@ -84,48 +149,96 @@ let playlist = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 let currentTrackIndex = -1;
 
 const audioPlayer = document.getElementById("audio-player");
+const seekBar = document.getElementById("seek-bar");
+const playIcon = document.getElementById("play-icon");
+const pauseIcon = document.getElementById("pause-icon");
 
-audioPlayer.addEventListener("ended", () => {
-    playNextTrack();
+// --- Audio Event Listeners ---
+audioPlayer.addEventListener("ended", () => playNextTrack());
+
+audioPlayer.addEventListener("timeupdate", () => {
+    if (audioPlayer.duration) {
+        const pct = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+        seekBar.value = pct;
+        document.getElementById("current-time").textContent = formatTime(audioPlayer.currentTime);
+        document.getElementById("total-duration").textContent = formatTime(audioPlayer.duration);
+    }
 });
+
+audioPlayer.addEventListener("play", () => {
+    playIcon.classList.add("hidden");
+    pauseIcon.classList.remove("hidden");
+});
+
+audioPlayer.addEventListener("pause", () => {
+    playIcon.classList.remove("hidden");
+    pauseIcon.classList.add("hidden");
+});
+
+function togglePlayPause() {
+    if (currentTrackIndex === -1 && playlist.length > 0) {
+        playTrack(0);
+        return;
+    }
+    if (audioPlayer.paused) {
+        audioPlayer.play().catch(console.error);
+    } else {
+        audioPlayer.pause();
+    }
+}
+
+function seekAudio(val) {
+    if (audioPlayer.duration) {
+        audioPlayer.currentTime = (val / 100) * audioPlayer.duration;
+    }
+}
+
+function formatTime(secs) {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
 
 function savePlaylist() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
     renderQueue();
 }
 
+// --- Engine Status Monitor ---
 async function checkInstallStatus() {
-    const badge = document.getElementById("status-badge");
+    const dot = document.getElementById("status-dot");
+    const label = document.getElementById("status-text");
+
     try {
         const response = await fetch(`/runner/api/${APP_NAME}/get_install_status`);
         const res = await response.json();
         const data = res.data || res;
 
         if (data.is_installed) {
-            badge.className = "text-xs px-2 py-1 rounded bg-green-950 text-green-400 border border-green-800";
-            badge.textContent = "yt-dlp Ready";
+            dot.className = "w-2 h-2 rounded-full bg-[#1db954]";
+            label.textContent = "Engine Ready";
         } else if (data.is_installing) {
-            badge.className = "text-xs px-2 py-1 rounded bg-yellow-950 text-yellow-400 border border-yellow-800 animate-pulse";
-            badge.textContent = "Installing...";
+            dot.className = "w-2 h-2 rounded-full bg-yellow-400 animate-ping";
+            label.textContent = "Setting up engine...";
         }
     } catch (e) {
-        console.error("Status error", e);
+        dot.className = "w-2 h-2 rounded-full bg-red-500";
+        label.textContent = "Offline";
     }
 }
 setInterval(checkInstallStatus, 3000);
 checkInstallStatus();
 
+// --- Add & Play Track Flow ---
 async function addAndPlayTrack() {
     const input = document.getElementById("search-input");
     const query = input.value.trim();
     const btn = document.getElementById("add-btn");
-    const status = document.getElementById("player-status");
 
     if (!query) return;
 
     btn.disabled = true;
     btn.classList.add("opacity-50");
-    status.textContent = "Fetching instant stream link...";
 
     try {
         const response = await fetch(`/runner/api/${APP_NAME}/stream_and_trigger_download?query=${encodeURIComponent(query)}`);
@@ -141,32 +254,33 @@ async function addAndPlayTrack() {
                 thumbnail: data.thumbnail,
                 stream_url: data.stream_url,
                 file_name: data.file_name,
-                is_saved: data.is_saved
+                is_saved: data.is_saved || false,
+                download_progress: data.is_saved ? 100 : 0
             };
 
             playlist.push(trackObj);
             input.value = "";
             savePlaylist();
 
-            // Start background polling to check when silent download finishes
+            const trackIndex = playlist.length - 1;
+
             if (!trackObj.is_saved) {
-                pollDownloadStatus(playlist.length - 1);
+                pollDownloadStatus(trackIndex);
             }
 
             if (currentTrackIndex === -1) {
-                playTrack(playlist.length - 1);
+                playTrack(trackIndex);
             }
-        } else {
-            status.textContent = res.error || "Could not fetch track.";
         }
     } catch (e) {
-        status.textContent = "Backend connection error.";
+        console.error("Fetch failed", e);
     } finally {
         btn.disabled = false;
         btn.classList.remove("opacity-50");
     }
 }
 
+// --- Dynamic Download Progress Polling ---
 function pollDownloadStatus(index) {
     const pollInterval = setInterval(async () => {
         if (!playlist[index]) {
@@ -178,78 +292,108 @@ function pollDownloadStatus(index) {
             const res = await fetch(`/runner/api/${APP_NAME}/check_file_status?file_name=${encodeURIComponent(playlist[index].file_name)}`);
             const data = await res.json();
             
+            // Increment UI progress smoothly while waiting
+            if (playlist[index].download_progress < 90) {
+                playlist[index].download_progress += 10;
+                renderQueue();
+            }
+
             if (data.is_saved) {
                 playlist[index].is_saved = true;
+                playlist[index].download_progress = 100;
                 savePlaylist();
                 clearInterval(pollInterval);
             }
         } catch (e) {
             console.error("Polling error", e);
         }
-    }, 3000);
+    }, 2000);
 }
 
+// --- Track List Renderer ---
 function renderQueue() {
     const list = document.getElementById("queue-list");
     document.getElementById("queue-count").textContent = playlist.length;
     list.innerHTML = "";
 
     if (playlist.length === 0) {
-        list.innerHTML = '<div class="text-xs text-gray-500 text-center py-2">Playlist empty.</div>';
+        list.innerHTML = '<div class="text-xs text-gray-500 text-center py-8">No tracks in queue. Search above to begin.</div>';
         return;
     }
 
     playlist.forEach((track, idx) => {
         const isCurrent = idx === currentTrackIndex;
         const item = document.createElement("div");
-        item.className = `flex justify-between items-center p-2 rounded text-xs ${isCurrent ? 'bg-green-950 text-green-300 border border-green-800' : 'bg-gray-800/50 text-gray-300'}`;
+        item.className = `group grid grid-cols-[16px_1fr_auto_auto] gap-4 items-center px-4 py-3 rounded-md text-sm transition-colors cursor-pointer ${
+            isCurrent ? 'bg-[#282828] text-[#1db954]' : 'hover:bg-[#1a1a1a] text-gray-300'
+        }`;
         
-        const statusLabel = track.is_saved 
-            ? '<span class="text-[10px] text-green-400">💾 Saved Offline</span>' 
-            : '<span class="text-[10px] text-yellow-500 animate-pulse">⏳ Downloading low-data file...</span>';
+        let statusBadge = "";
+        if (track.is_saved) {
+            statusBadge = `<span class="text-[11px] text-[#1db954] flex items-center gap-1 font-medium">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Saved
+            </span>`;
+        } else {
+            const pct = track.download_progress || 0;
+            statusBadge = `
+                <div class="flex items-center gap-2">
+                    <div class="w-16 bg-[#282828] h-1.5 rounded-full overflow-hidden">
+                        <div class="bg-[#1db954] h-full transition-all duration-300" style="width: ${pct}%"></div>
+                    </div>
+                    <span class="text-[10px] text-gray-400 font-mono">${pct}%</span>
+                </div>
+            `;
+        }
 
         item.innerHTML = `
-            <div class="truncate cursor-pointer flex-1 mr-2" onclick="playTrack(${idx})">
-                <span class="font-bold">${idx + 1}.</span> ${track.title}
-                <div class="block">${statusLabel}</div>
+            <span class="text-xs font-mono text-gray-500 group-hover:text-white">${idx + 1}</span>
+            <div class="flex items-center gap-3 overflow-hidden" onclick="playTrack(${idx})">
+                <img src="${track.thumbnail}" class="w-10 h-10 object-cover rounded bg-[#282828] shrink-0" />
+                <div class="truncate">
+                    <div class="font-semibold truncate text-white ${isCurrent ? 'text-[#1db954]' : ''}">${track.title}</div>
+                    <div class="text-xs text-gray-400 truncate">${track.artist}</div>
+                </div>
             </div>
-            <button onclick="deleteTrack(${idx})" class="text-red-400 hover:text-red-300 px-1">✕</button>
+            <div class="text-right">${statusBadge}</div>
+            <button onclick="event.stopPropagation(); deleteTrack(${idx})" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white transition px-1">
+                ✕
+            </button>
         `;
         list.appendChild(item);
     });
 }
 
+// --- Player Engine Controls ---
 async function playTrack(index) {
     if (index < 0 || index >= playlist.length) return;
 
     currentTrackIndex = index;
     const track = playlist[index];
-    const status = document.getElementById("player-status");
-    const sourceBadge = document.getElementById("playback-source");
+    const sourceIndicator = document.getElementById("source-indicator");
 
-    document.getElementById("now-playing-card").classList.remove("hidden");
     document.getElementById("track-title").textContent = track.title;
     document.getElementById("track-artist").textContent = track.artist;
     document.getElementById("track-thumb").src = track.thumbnail;
 
-    // Direct playback using YouTube stream URL (or cached file if saved)
     if (track.stream_url) {
         audioPlayer.src = track.stream_url;
-        sourceBadge.textContent = "📡 Streaming Live";
-        sourceBadge.className = "text-[10px] px-2 py-1 rounded bg-blue-950 text-blue-300 border border-blue-800";
+        sourceIndicator.textContent = track.is_saved ? "Offline Vault" : "Live Stream";
+        sourceIndicator.classList.remove("hidden");
     }
 
     audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
-    status.textContent = "Playing";
-
     renderQueue();
 }
 
 function playNextTrack() {
     if (currentTrackIndex + 1 < playlist.length) {
         playTrack(currentTrackIndex + 1);
-    } else {
-        document.getElementById("player-status").textContent = "Reached end of playlist.";
+    }
+}
+
+function playPreviousTrack() {
+    if (currentTrackIndex > 0) {
+        playTrack(currentTrackIndex - 1);
     }
 }
 
@@ -269,7 +413,9 @@ async function deleteTrack(index) {
         } else {
             currentTrackIndex = -1;
             audioPlayer.pause();
-            document.getElementById("now-playing-card").classList.add("hidden");
+            document.getElementById("track-title").textContent = "Select a track";
+            document.getElementById("track-artist").textContent = "---";
+            document.getElementById("track-thumb").src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E";
         }
     } else if (currentTrackIndex > index) {
         currentTrackIndex--;
@@ -277,13 +423,12 @@ async function deleteTrack(index) {
     savePlaylist();
 }
 
-// Check status on startup for existing tracks
+// Restore state & polling on boot
 playlist.forEach((track, idx) => {
     if (!track.is_saved) pollDownloadStatus(idx);
 });
 
 renderQueue();
 </script>
-
 </body>
 </html>

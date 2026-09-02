@@ -1,6 +1,6 @@
 {
-  "name": "Jumia Scraper",
-  "description": "Scrapes raw web source code from jumia.co.ke using requests.",
+  "name": "lyrics",
+  "description": "Gets Lyrics",
   "icon": null,
   "debug": true
 }

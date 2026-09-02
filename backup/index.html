@@ -63,10 +63,27 @@
     </footer>
 
 <script>
-// Reliable route resolution targeting the runner API
-const pathSegments = window.location.pathname.split('/').filter(Boolean);
-const APP_NAME = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'backup';
-const API_BASE = `/runner/api/${APP_NAME}`;
+// Standardized APP_NAME targeting 'backup' explicitly with fallback mechanisms
+const APP_NAME = "backup";
+
+// Helper to handle multiple local server path schemes
+async function makeApiRequest(endpoint) {
+    const urlsToTry = [
+        `get_install_status` === endpoint || endpoint.startsWith('get_lyrics') ? `./${endpoint}` : endpoint,
+        `/runner/api/${APP_NAME}/${endpoint}`,
+        `${window.location.pathname.replace(/\/$/, '')}/${endpoint}`
+    ];
+
+    for (const url of urlsToTry) {
+        try {
+            const res = await fetch(url);
+            if (res.ok) return await res.json();
+        } catch (e) {
+            // try next endpoint URL
+        }
+    }
+    throw new Error("Failed to connect across API routes");
+}
 
 let parsedLyrics = [];
 let isEngineReady = false;
@@ -78,10 +95,7 @@ async function monitorEngine() {
     const placeholder = document.getElementById("placeholder");
 
     try {
-        const res = await fetch(`${API_BASE}/get_install_status`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const responseData = await res.json();
+        const responseData = await makeApiRequest("get_install_status");
         const data = responseData.data || responseData;
 
         if (data.ready) {
@@ -125,8 +139,7 @@ async function fetchLyrics() {
     container.innerHTML = `<div class="text-center text-gray-400 text-sm mt-12">Searching lyrics for "${query}"...</div>`;
 
     try {
-        const response = await fetch(`${API_BASE}/get_lyrics?query=${encodeURIComponent(query)}`);
-        const res = await response.json();
+        const res = await makeApiRequest(`get_lyrics?query=${encodeURIComponent(query)}`);
         const data = res.data || res;
 
         if (data.success) {
@@ -144,7 +157,7 @@ async function fetchLyrics() {
             syncBar.classList.add("hidden");
         }
     } catch (e) {
-        container.innerHTML = `<div class="text-center text-red-500 text-sm mt-12">Error communicating with engine.</div>`;
+        container.innerHTML = `<div class="text-center text-red-500 text-sm mt-12">Error communicating with backend engine.</div>`;
     } finally {
         btn.disabled = false;
     }

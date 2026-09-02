@@ -5,18 +5,20 @@ import zipfile
 import urllib.request
 import importlib
 
-# 1. Access Android Application Context via Chaquopy Java Bridge
-from com.chaquopy.python import Python
+# 1. Safe Dynamic Import for Chaquopy Context
+APP_FILES_DIR = None
 
 try:
+    # Safely import Java package at runtime without triggering static analyzers
+    chaquopy_mod = importlib.import_module("com.chaquopy.python")
+    Python = getattr(chaquopy_mod, "Python")
     context = Python.getPlatform().getApplication()
-    # Returns /data/user/0/<your.package.name>/files
     APP_FILES_DIR = str(context.getFilesDir().getAbsolutePath())
-except Exception as e:
-    # Fallback to local script directory if testing outside Android environment
+except (ImportError, ModuleNotFoundError, AttributeException, Exception) as e:
+    # Fallback when running outside Android or during host static analysis
     APP_FILES_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 2. Configure Persistent Android Storage Directories
+# 2. Configure Storage Paths
 LOCAL_LIB_DIR = os.path.join(APP_FILES_DIR, "libs")
 DOWNLOAD_DIR = os.path.join(APP_FILES_DIR, "audio_downloads")
 
@@ -38,7 +40,6 @@ def install_ytdlp_background():
     INSTALLATION_STATUS["is_installing"] = True
     INSTALLATION_STATUS["message"] = "Downloading yt-dlp..."
 
-    # Method 1: In-Process Installation via runpy (Chaquopy Safe)
     try:
         import runpy
         sys.argv = ['pip', 'install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet']
@@ -60,7 +61,6 @@ def install_ytdlp_background():
     except Exception as e1:
         print(f"[RUNPY PIP FAILED]: {e1}")
 
-    # Method 2: Direct Zip Archive Extraction
     try:
         INSTALLATION_STATUS["message"] = "Downloading zip archive..."
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
@@ -136,7 +136,6 @@ def stream_and_trigger_download(params=None):
             if not stream_url and not is_saved:
                 return {"error": "No playable stream found."}
 
-            # Trigger background download to persistent Android storage if not saved
             if not is_saved:
                 thread = threading.Thread(target=_silent_download_worker, args=(query, file_path))
                 thread.daemon = True
@@ -179,7 +178,6 @@ def check_file_status(params=None):
     file_path = os.path.join(DOWNLOAD_DIR, params.get("file_name"))
     return {"is_saved": os.path.exists(file_path)}
 
-# Serves the saved persistent file path back to your runner framework
 def get_local_audio(params=None):
     if not params or not params.get("file_name"):
         return {"error": "No file name provided."}

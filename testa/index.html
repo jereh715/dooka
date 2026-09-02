@@ -349,16 +349,11 @@ function pollDownloadStatus(index) {
             if (resData.is_saved) {
                 playlist[index].is_saved = true;
                 playlist[index].download_progress = 100;
-                savePlaylist();
+                savePlaylist(); // Updates local storage and queue UI to "Saved" badge smoothly
                 clearInterval(pollInterval);
 
-                if (currentTrackIndex === index) {
-                    const currentPos = audioPlayer.currentTime;
-                    const wasPlaying = !audioPlayer.paused;
-                    audioPlayer.src = `/runner/api/${APP_NAME}/get_local_audio?file_name=${encodeURIComponent(playlist[index].file_name)}`;
-                    audioPlayer.currentTime = currentPos;
-                    if (wasPlaying) audioPlayer.play().catch(console.warn);
-                }
+                // IMPORTANT: We do NOT modify audioPlayer.src here while the track plays.
+                // The active remote stream will continue seamlessly until completed.
             }
         } catch (e) {
             console.error("Polling error", e);

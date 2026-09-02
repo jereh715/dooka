@@ -21,6 +21,11 @@
                 <span id="status-text" class="text-xs text-gray-400">Initializing...</span>
             </div>
         </div>
+
+        <!-- On-Screen Debug Output Box -->
+        <div id="debug-box" class="bg-[#18181b] border border-[#27272a] rounded-lg p-2 text-[10px] font-mono text-gray-300 max-h-24 overflow-y-auto space-y-1">
+            <div class="text-gray-500 font-bold">--- Debug Console ---</div>
+        </div>
         
         <div class="flex gap-2">
             <input 
@@ -41,7 +46,7 @@
         </div>
     </header>
 
-    <main id="lyrics-container" class="flex-1 overflow-y-auto my-6 p-4 bg-[#141414] border border-[#262626] rounded-xl space-y-4">
+    <main id="lyrics-container" class="flex-1 overflow-y-auto my-4 p-4 bg-[#141414] border border-[#262626] rounded-xl space-y-4">
         <div id="placeholder" class="text-center text-gray-500 text-sm mt-12">Waiting for engine dependencies...</div>
     </main>
 
@@ -63,26 +68,50 @@
     </footer>
 
 <script>
-// Standardized APP_NAME targeting 'backup' explicitly with fallback mechanisms
-const APP_NAME = "backup";
+function logDebug(msg, isError = false) {
+    const box = document.getElementById("debug-box");
+    const line = document.createElement("div");
+    line.className = isError ? "text-red-400" : "text-emerald-400";
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+}
 
-// Helper to handle multiple local server path schemes
+logDebug(`URL Path: ${window.location.pathname}`);
+logDebug(`Origin: ${window.location.origin}`);
+
+// Build explicit candidate routes for the 'backup' app module
+const pathSegments = window.location.pathname.split('/').filter(Boolean);
+const detectedAppName = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'backup';
+
+logDebug(`Detected App Target: ${detectedAppName}`);
+
 async function makeApiRequest(endpoint) {
     const urlsToTry = [
-        `get_install_status` === endpoint || endpoint.startsWith('get_lyrics') ? `./${endpoint}` : endpoint,
-        `/runner/api/${APP_NAME}/${endpoint}`,
-        `${window.location.pathname.replace(/\/$/, '')}/${endpoint}`
+        `/runner/api/${detectedAppName}/${endpoint}`,
+        `/runner/api/backup/${endpoint}`,
+        `./${endpoint}`,
+        `${endpoint}`
     ];
+
+    let lastError = null;
 
     for (const url of urlsToTry) {
         try {
+            logDebug(`Trying fetch -> ${url}`);
             const res = await fetch(url);
-            if (res.ok) return await res.json();
+            logDebug(`Response status for ${url}: ${res.status}`);
+            if (res.ok) {
+                const json = await res.json();
+                logDebug(`SUCCESS from endpoint: ${url}`);
+                return json;
+            }
         } catch (e) {
-            // try next endpoint URL
+            logDebug(`FAIL on ${url}: ${e.message}`, true);
+            lastError = e;
         }
     }
-    throw new Error("Failed to connect across API routes");
+    throw lastError || new Error("All endpoint candidates failed.");
 }
 
 let parsedLyrics = [];
@@ -97,6 +126,8 @@ async function monitorEngine() {
     try {
         const responseData = await makeApiRequest("get_install_status");
         const data = responseData.data || responseData;
+
+        logDebug(`Engine payload received: ready=${data.ready}, installing=${data.installing}`);
 
         if (data.ready) {
             isEngineReady = true;
@@ -114,14 +145,17 @@ async function monitorEngine() {
         } else if (data.error) {
             dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
             text.textContent = "Error loading libs";
+            logDebug(`Engine error: ${data.error}`, true);
             btn.disabled = true;
         }
     } catch (e) {
         dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
         text.textContent = "Disconnected";
+        logDebug(`Network/Route Disconnected: ${e.message}`, true);
         setTimeout(monitorEngine, 3000);
     }
 }
+
 monitorEngine();
 
 async function fetchLyrics() {

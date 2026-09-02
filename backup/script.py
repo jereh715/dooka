@@ -5,8 +5,18 @@ import zipfile
 import urllib.request
 import importlib
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LIB_DIR = os.path.join(BASE_DIR, "lyrics_libs")
+# 1. Safe Dynamic Import for Chaquopy / Standalone Execution
+APP_FILES_DIR = None
+
+try:
+    chaquopy_mod = importlib.import_module("com.chaquopy.python")
+    Python = getattr(chaquopy_mod, "Python")
+    context = Python.getPlatform().getApplication()
+    APP_FILES_DIR = str(context.getFilesDir().getAbsolutePath())
+except Exception:
+    APP_FILES_DIR = os.path.dirname(os.path.abspath(__file__))
+
+LIB_DIR = os.path.join(APP_FILES_DIR, "lyrics_libs")
 
 os.makedirs(LIB_DIR, exist_ok=True)
 if LIB_DIR not in sys.path:
@@ -39,7 +49,7 @@ def install_dependencies():
     except Exception as e1:
         print(f"[PIP FAILED]: {e1}")
 
-    # Method 2: Direct Zip Release Download Fallback
+    # Method 2: Direct Zip Extract Fallback
     try:
         STATUS["message"] = "Downloading syncedlyrics package..."
         url = "https://github.com/moezx/syncedlyrics/archive/refs/heads/main.zip"
@@ -52,14 +62,25 @@ def install_dependencies():
         if os.path.exists(target_zip):
             os.remove(target_zip)
 
+        # Move unzipped inner package directory to root LIB_DIR
+        extracted_folder = os.path.join(LIB_DIR, "syncedlyrics-main")
+        if os.path.exists(extracted_folder):
+            src_pkg = os.path.join(extracted_folder, "syncedlyrics")
+            if os.path.exists(src_pkg):
+                import shutil
+                dest_pkg = os.path.join(LIB_DIR, "syncedlyrics")
+                if not os.path.exists(dest_pkg):
+                    shutil.move(src_pkg, dest_pkg)
+
         importlib.invalidate_caches()
+        import syncedlyrics
         STATUS["ready"] = True
         STATUS["installing"] = False
         STATUS["message"] = "Engine Ready"
     except Exception as e2:
         STATUS["installing"] = False
         STATUS["error"] = str(e2)
-        STATUS["message"] = f"Failed to load dependencies: {str(e2)}"
+        STATUS["message"] = f"Failed: {str(e2)}"
 
 def check_or_start_engine():
     global STATUS
@@ -74,7 +95,6 @@ def check_or_start_engine():
             thread.start()
         return False
 
-# Trigger check on initialization
 check_or_start_engine()
 
 def get_install_status(params=None):

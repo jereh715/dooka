@@ -12,7 +12,7 @@
         ::-webkit-scrollbar-thumb { background: #282828; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #3e3e3e; }
         .lyric-line { transition: color 0.2s ease, transform 0.2s ease, font-size 0.2s ease; }
-        .lyric-active { color: #ffffff !important; font-weight: 700; scale: 1.03; origin-left; }
+        .lyric-active { color: #ffffff !important; font-weight: 700; scale: 1.03; transform-origin: left; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden select-none">
@@ -66,7 +66,6 @@
                     </button>
                 </div>
 
-                <!-- Live Status & Error Alert Bar -->
                 <div class="flex items-center justify-between px-2 text-xs">
                     <div class="flex items-center gap-2">
                         <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
@@ -83,7 +82,6 @@
                     <span class="text-xs text-gray-400 font-semibold"><span id="queue-count">0</span> tracks</span>
                 </div>
 
-                <!-- Table Header -->
                 <div class="grid grid-cols-[16px_1fr_auto_auto] gap-4 px-4 py-2 text-xs font-semibold text-gray-400 border-b border-[#282828] mb-2">
                     <span>#</span>
                     <span>Title</span>
@@ -91,12 +89,11 @@
                     <span class="w-6"></span>
                 </div>
 
-                <!-- Track List -->
                 <div id="queue-list" class="space-y-1"></div>
             </div>
         </main>
 
-        <!-- Spotify-style Side Lyrics Overlay Panel -->
+        <!-- Spotify Side Lyrics Panel -->
         <aside id="lyrics-panel" class="w-full md:w-80 bg-[#121212] rounded-lg p-6 flex flex-col justify-between shrink-0 hidden border-l border-[#282828]/50 shadow-2xl transition-all duration-300">
             <div class="flex items-center justify-between pb-4 border-b border-[#282828]">
                 <h3 class="text-white font-bold text-base flex items-center gap-2">
@@ -117,7 +114,6 @@
     <!-- Bottom Player Bar -->
     <footer class="h-24 bg-black border-t border-[#282828] px-4 flex items-center justify-between shrink-0">
         
-        <!-- Track Details -->
         <div class="flex items-center gap-3 w-1/3 min-w-[140px]">
             <img id="track-thumb" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E" class="w-12 h-12 md:w-14 md:h-14 object-cover rounded bg-[#282828] shrink-0" />
             <div class="overflow-hidden">
@@ -126,7 +122,6 @@
             </div>
         </div>
 
-        <!-- Custom Audio Controls Center -->
         <div class="flex flex-col items-center gap-2 w-1/3 max-w-xl">
             <div class="flex items-center gap-4 md:gap-6">
                 <button onclick="playPreviousTrack()" class="text-gray-400 hover:text-white transition">
@@ -141,7 +136,6 @@
                 </button>
             </div>
 
-            <!-- Seek Bar Bridge -->
             <div class="w-full flex items-center gap-2">
                 <span id="current-time" class="text-[11px] text-gray-400 w-8 text-right">0:00</span>
                 <input type="range" id="seek-bar" value="0" min="0" max="100" class="w-full h-1 bg-[#4d4d4d] rounded-lg appearance-none cursor-pointer accent-white hover:accent-[#1db954]" oninput="seekAudio(this.value)" />
@@ -149,7 +143,6 @@
             </div>
         </div>
 
-        <!-- Source Badge & Lyrics Toggle -->
         <div class="w-1/3 flex justify-end items-center gap-3">
             <span id="source-indicator" class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-[#282828] text-gray-400 font-bold hidden md:inline-block">
                 Ready
@@ -176,7 +169,6 @@ const seekBar = document.getElementById("seek-bar");
 const playIcon = document.getElementById("play-icon");
 const pauseIcon = document.getElementById("pause-icon");
 
-// --- Audio Controls & Events ---
 audioPlayer.addEventListener("ended", () => playNextTrack());
 
 audioPlayer.addEventListener("timeupdate", () => {
@@ -185,8 +177,6 @@ audioPlayer.addEventListener("timeupdate", () => {
         seekBar.value = pct;
         document.getElementById("current-time").textContent = formatTime(audioPlayer.currentTime);
         document.getElementById("total-duration").textContent = formatTime(audioPlayer.duration);
-        
-        // Sync timestamped lyrics if available
         updateActiveLyric(audioPlayer.currentTime);
     }
 });
@@ -239,7 +229,6 @@ function showError(msg) {
     }, 4000);
 }
 
-// --- Engine Status Monitor ---
 async function checkInstallStatus() {
     const dot = document.getElementById("status-dot");
     const label = document.getElementById("status-text");
@@ -264,7 +253,6 @@ async function checkInstallStatus() {
 setInterval(checkInstallStatus, 3000);
 checkInstallStatus();
 
-// --- Add & Play Track ---
 async function addAndPlayTrack() {
     const input = document.getElementById("search-input");
     const query = input.value.trim();
@@ -323,7 +311,6 @@ async function addAndPlayTrack() {
     }
 }
 
-// --- Download Progress Monitor ---
 function pollDownloadStatus(index) {
     const pollInterval = setInterval(async () => {
         if (!playlist[index]) {
@@ -360,7 +347,6 @@ function pollDownloadStatus(index) {
     }, 2500);
 }
 
-// --- Queue Renderer ---
 function renderQueue() {
     const list = document.getElementById("queue-list");
     document.getElementById("queue-count").textContent = playlist.length;
@@ -413,7 +399,6 @@ function renderQueue() {
     });
 }
 
-// --- Audio Player Controller ---
 async function playTrack(index) {
     if (index < 0 || index >= playlist.length) return;
 
@@ -437,7 +422,10 @@ async function playTrack(index) {
 
     audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
     renderQueue();
-    fetchLyricsForTrack(`${track.title} ${track.artist}`);
+    
+    // Automatically fetch lyrics using cleaned track name
+    const searchQuery = track.query || `${track.title} ${track.artist}`;
+    fetchLyricsForTrack(searchQuery);
 }
 
 function playNextTrack() {
@@ -485,7 +473,6 @@ async function deleteTrack(index) {
     savePlaylist();
 }
 
-// --- Lyrics Controller ---
 function toggleLyricsPanel() {
     const panel = document.getElementById("lyrics-panel");
     const btn = document.getElementById("lyrics-btn");
@@ -498,12 +485,14 @@ function toggleLyricsPanel() {
     }
 }
 
+// Resilient Lyrics Fetching Strategy
 async function fetchLyricsForTrack(query) {
     const container = document.getElementById("lyrics-container");
-    container.innerHTML = '<div class="text-sm text-gray-400 text-center py-10 flex justify-center items-center gap-2"><span class="animate-spin">⏳</span> Searching lyrics...</div>';
+    container.innerHTML = '<div class="text-sm text-gray-400 text-center py-10 flex justify-center items-center gap-2"><span class="animate-spin">⏳</span> Fetching lyrics...</div>';
     currentLyricsData = null;
     activeLyricIndex = -1;
 
+    // Step 1: Try Local Backend API
     try {
         const res = await fetch(`/runner/api/${APP_NAME}/get_lyrics?query=${encodeURIComponent(query)}`);
         const data = await res.json();
@@ -511,19 +500,64 @@ async function fetchLyricsForTrack(query) {
         if (data.success) {
             currentLyricsData = data;
             renderLyrics(data);
-        } else {
-            container.innerHTML = `<div class="text-sm text-gray-500 text-center py-10">${data.message || 'No lyrics available.'}</div>`;
+            return;
         }
     } catch (e) {
-        container.innerHTML = '<div class="text-sm text-red-400 text-center py-10">Failed to fetch lyrics.</div>';
+        console.warn("Backend lyrics route unreachable, trying client-side fallback...");
     }
+
+    // Step 2: Client-Side Fallback directly to LRCLIB API
+    try {
+        const cleaned = query.replace(/(?i)\(official video\)|\(lyric video\)|- topic/g, '').trim();
+        const response = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(cleaned)}`);
+        const results = await response.json();
+
+        if (Array.isArray(results) && results.length > 0) {
+            const best = results.find(item => item.syncedLyrics) || results[0];
+            const synced = best.syncedLyrics;
+            const plain = best.plainLyrics;
+
+            if (synced) {
+                currentLyricsData = { is_synced: true, parsed: parseClientLrc(synced) };
+                renderLyrics(currentLyricsData);
+                return;
+            } else if (plain) {
+                currentLyricsData = { is_synced: false, raw: plain };
+                renderLyrics(currentLyricsData);
+                return;
+            }
+        }
+    } catch (err) {
+        console.error("Client fallback error:", err);
+    }
+
+    container.innerHTML = `<div class="text-sm text-gray-500 text-center py-10">No lyrics found for this track.</div>`;
+}
+
+function parseClientLrc(lrcText) {
+    if (!lrcText) return [];
+    const lines = lrcText.split('\n');
+    const result = [];
+    const regex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+
+    lines.forEach(line => {
+        const match = regex.exec(line.trim());
+        if (match) {
+            const [, min, sec, ms, text] = match;
+            const time = parseInt(min) * 60 + parseInt(sec) + parseInt(ms) / (ms.length === 3 ? 1000 : 100);
+            if (text.strip ? text.strip() : text.trim()) {
+                result.push({ time, text: text.trim() });
+            }
+        }
+    });
+    return result;
 }
 
 function renderLyrics(lyricsObj) {
     const container = document.getElementById("lyrics-container");
     container.innerHTML = "";
 
-    if (lyricsObj.is_synced && lyricsObj.parsed.length > 0) {
+    if (lyricsObj.is_synced && lyricsObj.parsed && lyricsObj.parsed.length > 0) {
         lyricsObj.parsed.forEach((line, index) => {
             const p = document.createElement("p");
             p.id = `lyric-line-${index}`;
@@ -547,7 +581,7 @@ function renderLyrics(lyricsObj) {
 }
 
 function updateActiveLyric(currentTime) {
-    if (!currentLyricsData || !currentLyricsData.is_synced || !currentLyricsData.parsed.length) return;
+    if (!currentLyricsData || !currentLyricsData.is_synced || !currentLyricsData.parsed || !currentLyricsData.parsed.length) return;
 
     const parsed = currentLyricsData.parsed;
     let newIndex = -1;
@@ -581,7 +615,6 @@ function resetLyricsDisplay() {
     document.getElementById("lyrics-container").innerHTML = '<div class="text-sm text-gray-500 text-center py-10 italic">Select a track to load lyrics</div>';
 }
 
-// Restore & Poll unfinished tracks on startup
 playlist.forEach((track, idx) => {
     if (!track.is_saved) pollDownloadStatus(idx);
 });

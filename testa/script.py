@@ -5,10 +5,20 @@ import zipfile
 import urllib.request
 import importlib
 
-# 1. Store storage paths relative to script directory (bypasses tempfile crash)
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-LOCAL_LIB_DIR = os.path.join(CURRENT_DIR, "libs")
-DOWNLOAD_DIR = os.path.join(CURRENT_DIR, "audio_downloads")
+# 1. Access Android Application Context via Chaquopy Java Bridge
+from com.chaquopy.python import Python
+
+try:
+    context = Python.getPlatform().getApplication()
+    # Returns /data/user/0/<your.package.name>/files
+    APP_FILES_DIR = str(context.getFilesDir().getAbsolutePath())
+except Exception as e:
+    # Fallback to local script directory if testing outside Android environment
+    APP_FILES_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 2. Configure Persistent Android Storage Directories
+LOCAL_LIB_DIR = os.path.join(APP_FILES_DIR, "libs")
+DOWNLOAD_DIR = os.path.join(APP_FILES_DIR, "audio_downloads")
 
 for folder in [LOCAL_LIB_DIR, DOWNLOAD_DIR]:
     os.makedirs(folder, exist_ok=True)
@@ -28,7 +38,7 @@ def install_ytdlp_background():
     INSTALLATION_STATUS["is_installing"] = True
     INSTALLATION_STATUS["message"] = "Downloading yt-dlp..."
 
-    # Method 1: In-Process Fallback via runpy (Android / Chaquopy safe)
+    # Method 1: In-Process Installation via runpy (Chaquopy Safe)
     try:
         import runpy
         sys.argv = ['pip', 'install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet']
@@ -50,7 +60,7 @@ def install_ytdlp_background():
     except Exception as e1:
         print(f"[RUNPY PIP FAILED]: {e1}")
 
-    # Method 2: Direct Zip Download Fallback
+    # Method 2: Direct Zip Archive Extraction
     try:
         INSTALLATION_STATUS["message"] = "Downloading zip archive..."
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
@@ -102,7 +112,7 @@ def stream_and_trigger_download(params=None):
     query = params.get("query")
 
     ydl_opts = {
-        'format': 'worstaudio[ext=webm]/worstaudio[ext=m4a]/worstaudio/worst',
+        'format': 'worstaudio[ext=m4a]/worstaudio[ext=webm]/worstaudio/worst',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
@@ -117,7 +127,7 @@ def stream_and_trigger_download(params=None):
 
             video_id = video.get('id')
             stream_url = video.get('url')
-            ext = video.get('ext', 'webm')
+            ext = video.get('ext', 'm4a')
             file_name = f"{video_id}.{ext}"
             file_path = os.path.join(DOWNLOAD_DIR, file_name)
 
@@ -126,6 +136,7 @@ def stream_and_trigger_download(params=None):
             if not stream_url and not is_saved:
                 return {"error": "No playable stream found."}
 
+            # Trigger background download to persistent Android storage if not saved
             if not is_saved:
                 thread = threading.Thread(target=_silent_download_worker, args=(query, file_path))
                 thread.daemon = True
@@ -148,7 +159,7 @@ def stream_and_trigger_download(params=None):
 def _silent_download_worker(query, target_path):
     import yt_dlp
     ydl_opts = {
-        'format': 'worstaudio[ext=webm]/worstaudio[ext=m4a]/worstaudio/worst',
+        'format': 'worstaudio[ext=m4a]/worstaudio[ext=webm]/worstaudio/worst',
         'outtmpl': target_path,
         'noplaylist': True,
         'quiet': True,
@@ -168,12 +179,25 @@ def check_file_status(params=None):
     file_path = os.path.join(DOWNLOAD_DIR, params.get("file_name"))
     return {"is_saved": os.path.exists(file_path)}
 
+# Serves the saved persistent file path back to your runner framework
+def get_local_audio(params=None):
+    if not params or not params.get("file_name"):
+        return {"error": "No file name provided."}
+    file_name = params.get("file_name")
+    file_path = os.path.join(DOWNLOAD_DIR, file_name)
+    if os.path.exists(file_path):
+        return {"file_path": file_path, "is_saved": True}
+    return {"error": "File not found.", "is_saved": False}
+
 def delete_local_file(params=None):
     if not params or not params.get("file"):
         return {"error": "No file name provided."}
     
     file_path = os.path.join(DOWNLOAD_DIR, params.get("file"))
     if os.path.exists(file_path):
-        os.remove(file_path)
-        return {"success": True}
+        try:
+            os.remove(file_path)
+            return {"success": True}
+        except Exception as e:
+            return {"error": f"Failed to delete file: {str(e)}"}
     return {"error": "File not found."}

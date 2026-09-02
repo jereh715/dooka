@@ -8,7 +8,6 @@ import importlib
 import json
 import re
 
-# 1. Safe Dynamic Import for Chaquopy / Standalone Execution
 APP_FILES_DIR = None
 
 try:
@@ -17,10 +16,8 @@ try:
     context = Python.getPlatform().getApplication()
     APP_FILES_DIR = str(context.getFilesDir().getAbsolutePath())
 except (ImportError, ModuleNotFoundError, AttributeError, Exception):
-    # Fallback when running inside standard Python web host or app runner environment
     APP_FILES_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 2. Configure Storage Paths
 LOCAL_LIB_DIR = os.path.join(APP_FILES_DIR, "libs")
 DOWNLOAD_DIR = os.path.join(APP_FILES_DIR, "audio_downloads")
 
@@ -37,13 +34,11 @@ INSTALLATION_STATUS = {
     "error": None
 }
 
-# 3. Dynamic Package Management for yt-dlp
 def install_ytdlp_background():
     global INSTALLATION_STATUS
     INSTALLATION_STATUS["is_installing"] = True
     INSTALLATION_STATUS["message"] = "Downloading yt-dlp..."
 
-    # Method 1: In-Process Installation via runpy (Chaquopy Safe)
     try:
         import runpy
         sys.argv = ['pip', 'install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet']
@@ -65,7 +60,6 @@ def install_ytdlp_background():
     except Exception as e1:
         print(f"[RUNPY PIP FAILED]: {e1}")
 
-    # Method 2: Direct Zip Archive Extraction Fallback
     try:
         INSTALLATION_STATUS["message"] = "Downloading zip archive..."
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
@@ -105,7 +99,6 @@ def get_install_status(params=None):
     check_or_start_install()
     return INSTALLATION_STATUS
 
-# 4. Audio Streaming & File Operations
 def stream_and_trigger_download(params=None):
     if not check_or_start_install():
         return {"error": f"yt-dlp not ready: {INSTALLATION_STATUS['message']}"}
@@ -206,7 +199,7 @@ def delete_local_file(params=None):
             return {"error": f"Failed to delete file: {str(e)}"}
     return {"error": "File not found."}
 
-# 5. Lyrics Parsing and Fetching
+# --- Lyrics Engine & Parsing ---
 def parse_lrc(lrc_text):
     if not lrc_text:
         return []
@@ -221,18 +214,32 @@ def parse_lrc(lrc_text):
                 parsed.append({"time": time_sec, "text": text.strip()})
     return parsed
 
+def clean_query_title(text):
+    """ Cleans YouTube metadata clutter (e.g. Official Video, Topic, VEVO) """
+    if not text:
+        return ""
+    text = re.sub(r'(?i)\(official audio\)|\(official video\)|\(lyric video\)|\[official video\]', '', text)
+    text = re.sub(r'(?i)- topic|vevo', '', text)
+    return text.strip()
+
 def get_lyrics(params=None):
     if not params or not params.get("query"):
         return {"error": "Search query parameter required."}
 
-    query = params.get("query").strip()
+    raw_query = params.get("query")
+    cleaned_query = clean_query_title(raw_query)
+
+    # Required headers for LRCLIB API compliance
+    headers = {
+        'User-Agent': 'WebMusicPlayer/1.0 (https://github.com/my-music-app)'
+    }
     
-    # Primary provider: LRCLIB API
+    # Provider 1: LRCLIB API
     try:
-        url = f"https://lrclib.net/api/search?q={urllib.parse.quote(query)}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        url = f"https://lrclib.net/api/search?q={urllib.parse.quote(cleaned_query)}"
+        req = urllib.request.Request(url, headers=headers)
         
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=8) as response:
             data = json.loads(response.read().decode())
             
             if data and isinstance(data, list) and len(data) > 0:
@@ -244,7 +251,7 @@ def get_lyrics(params=None):
                 if synced_lrc:
                     return {
                         "success": True,
-                        "query": query,
+                        "query": cleaned_query,
                         "is_synced": True,
                         "raw": synced_lrc,
                         "parsed": parse_lrc(synced_lrc)
@@ -252,7 +259,7 @@ def get_lyrics(params=None):
                 elif plain_lrc:
                     return {
                         "success": True,
-                        "query": query,
+                        "query": cleaned_query,
                         "is_synced": False,
                         "raw": plain_lrc,
                         "parsed": []
@@ -260,18 +267,18 @@ def get_lyrics(params=None):
     except Exception as e:
         print(f"[DEBUG] LRCLIB Fetch Error: {e}")
 
-    # Fallback provider: MegaloBiz Regex Fetch
+    # Provider 2: MegaloBiz Regex Fallback
     try:
-        search_url = f"https://www.megalobiz.com/searchall?qv={urllib.parse.quote(query)}"
-        req = urllib.request.Request(search_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        search_url = f"https://www.megalobiz.com/searchall?qv={urllib.parse.quote(cleaned_query)}"
+        req = urllib.request.Request(search_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as response:
             html = response.read().decode()
             lrc_matches = re.findall(r'\[\d{2}:\d{2}\.\d{2,3}\].*', html)
             if lrc_matches:
                 raw_lrc = "\n".join(lrc_matches)
                 return {
                     "success": True,
-                    "query": query,
+                    "query": cleaned_query,
                     "is_synced": True,
                     "raw": raw_lrc,
                     "parsed": parse_lrc(raw_lrc)
@@ -279,4 +286,4 @@ def get_lyrics(params=None):
     except Exception as e:
         print(f"[DEBUG] Fallback Fetch Error: {e}")
 
-    return {"success": False, "message": "No lyrics found for this search."}
+    return {"success": False, "message": "No lyrics found for this track."}

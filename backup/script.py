@@ -1,6 +1,8 @@
 import os
 import sys
 import threading
+import zipfile
+import urllib.request
 import importlib
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -20,22 +22,44 @@ STATUS = {
 def install_dependencies():
     global STATUS
     STATUS["installing"] = True
-    STATUS["message"] = "Installing syncedlyrics & dependencies..."
+    STATUS["message"] = "Installing syncedlyrics..."
     
+    # Method 1: Standard runpy pip
     try:
         import runpy
-        # Install with full dependencies so required packages like rapidfuzz/requests are available
-        sys.argv = ['pip', 'install', '--target', LIB_DIR, 'syncedlyrics', '--quiet']
+        sys.argv = ['pip', 'install', '--target', LIB_DIR, 'syncedlyrics', 'rapidfuzz', 'requests', '--quiet']
         runpy.run_module('pip', run_name='__main__')
+        importlib.invalidate_caches()
         
+        import syncedlyrics
+        STATUS["ready"] = True
+        STATUS["installing"] = False
+        STATUS["message"] = "Engine Ready"
+        return
+    except Exception as e1:
+        print(f"[PIP FAILED]: {e1}")
+
+    # Method 2: Direct Zip Release Download Fallback
+    try:
+        STATUS["message"] = "Downloading syncedlyrics package..."
+        url = "https://github.com/moezx/syncedlyrics/archive/refs/heads/main.zip"
+        target_zip = os.path.join(LIB_DIR, "syncedlyrics.zip")
+        
+        urllib.request.urlretrieve(url, target_zip)
+        with zipfile.ZipFile(target_zip, 'r') as zip_ref:
+            zip_ref.extractall(LIB_DIR)
+        
+        if os.path.exists(target_zip):
+            os.remove(target_zip)
+
         importlib.invalidate_caches()
         STATUS["ready"] = True
         STATUS["installing"] = False
         STATUS["message"] = "Engine Ready"
-    except Exception as e:
+    except Exception as e2:
         STATUS["installing"] = False
-        STATUS["error"] = str(e)
-        STATUS["message"] = f"Install failed: {str(e)}"
+        STATUS["error"] = str(e2)
+        STATUS["message"] = f"Failed to load dependencies: {str(e2)}"
 
 def check_or_start_engine():
     global STATUS
@@ -50,7 +74,7 @@ def check_or_start_engine():
             thread.start()
         return False
 
-# Trigger background check/install on load
+# Trigger check on initialization
 check_or_start_engine()
 
 def get_install_status(params=None):
@@ -86,7 +110,7 @@ def get_lyrics(params=None):
         lrc_raw = syncedlyrics.search(query)
         
         if not lrc_raw:
-            return {"success": False, "message": "No lyrics found."}
+            return {"success": False, "message": "No lyrics found for this song."}
 
         is_synced = "[" in lrc_raw and "]" in lrc_raw
         

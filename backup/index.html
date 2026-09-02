@@ -3,133 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jumia Scraper</title>
+    <title>Synced Lyrics Finder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #0d0f17;
-            color: #e1e4ed;
-            margin: 0;
-            padding: 16px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .card {
-            background: #161925;
-            border: 1px solid #232838;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-        h2 { margin-top: 0; font-size: 18px; color: #fff; }
-        button {
-            background: #f68b1e;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            transition: opacity 0.2s;
-        }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .meta-info {
-            display: flex;
-            gap: 12px;
-            font-size: 12px;
-            color: #00ff66;
-            margin-top: 10px;
-        }
-        textarea {
-            width: 100%;
-            height: 350px;
-            background: #090a0f;
-            color: #7a8499;
-            border: 1px solid #232838;
-            border-radius: 8px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 11px;
-            resize: vertical;
-        }
+        body { background-color: #0d0d0d; color: #e5e5e5; font-family: system-ui, -apple-system, sans-serif; }
+        .lyric-line { transition: all 0.2s ease-in-out; }
+        .lyric-line.active { color: #22c55e; font-weight: 700; transform: scale(1.03); origin: left; }
     </style>
 </head>
-<body>
+<body class="h-screen flex flex-col justify-between max-w-2xl mx-auto p-4">
 
-<div class="container">
-    <div class="card">
-        <h2>Jumia Kenya Scraper</h2>
-        <button id="scrape-btn" onclick="triggerScrape()">Fetch Jumia HTML</button>
-        <div id="meta" class="meta-info"></div>
-    </div>
+    <!-- Search Section -->
+    <header class="space-y-3">
+        <h1 class="text-2xl font-bold text-white tracking-tight">Lyrics Search</h1>
+        <div class="flex gap-2">
+            <input 
+                type="text" 
+                id="search-input" 
+                placeholder="Song title or artist..." 
+                class="flex-1 bg-[#1a1a1a] border border-[#333] text-white text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:border-[#22c55e]"
+                onkeydown="if(event.key==='Enter') fetchLyrics()"
+            />
+            <button 
+                onclick="fetchLyrics()" 
+                id="search-btn"
+                class="bg-[#22c55e] hover:bg-[#16a34a] text-black font-semibold text-sm px-5 py-2.5 rounded-lg transition"
+            >
+                Search
+            </button>
+        </div>
+        <div id="status-msg" class="text-xs text-gray-500 min-h-[16px]"></div>
+    </header>
 
-    <div class="card">
-        <h2>HTML Output</h2>
-        <textarea id="output" readonly placeholder="Raw HTML string will appear here..."></textarea>
-    </div>
-</div>
+    <!-- Lyrics Scroll Container -->
+    <main id="lyrics-container" class="flex-1 overflow-y-auto my-6 p-4 bg-[#141414] border border-[#262626] rounded-xl space-y-4">
+        <div class="text-center text-gray-500 text-sm mt-12">Search for a song to display synchronized lyrics.</div>
+    </main>
+
+    <!-- Manual Timestamp Simulation Bar -->
+    <footer id="sync-bar" class="hidden bg-[#1a1a1a] p-3 rounded-lg border border-[#333] space-y-2">
+        <div class="flex justify-between text-xs text-gray-400">
+            <span>Simulated Track Progress</span>
+            <span id="time-display">0:00</span>
+        </div>
+        <input 
+            type="range" 
+            id="timeline" 
+            value="0" 
+            min="0" 
+            max="200" 
+            step="0.5" 
+            class="w-full accent-[#22c55e]" 
+            oninput="syncLyricsToTime(parseFloat(this.value))" 
+        />
+    </footer>
 
 <script>
-    // Extract app ID dynamically from route URL path (/mini_apps/<app_id>/index.html)
-    const pathParts = window.location.pathname.split('/');
-    const appId = pathParts[2] || 'scraper';
+let parsedLyrics = [];
 
-    async function triggerScrape() {
-        const btn = document.getElementById('scrape-btn');
-        const output = document.getElementById('output');
-        const meta = document.getElementById('meta');
+async function fetchLyrics() {
+    const input = document.getElementById("search-input");
+    const btn = document.getElementById("search-btn");
+    const status = document.getElementById("status-msg");
+    const container = document.getElementById("lyrics-container");
+    const syncBar = document.getElementById("sync-bar");
 
-        btn.disabled = true;
-        btn.innerText = "Scraping...";
-        output.value = "Sending request to jumia.co.ke via Python requests...";
-        meta.innerText = "";
+    const query = input.value.trim();
+    if (!query) return;
 
-        try {
-            const res = await fetch(`/runner/api/${appId}/scrape_jumia`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            });
+    btn.disabled = true;
+    status.textContent = "Searching sources...";
+    container.innerHTML = `<div class="text-center text-gray-400 text-sm mt-12">Fetching synchronized lyrics...</div>`;
 
-            const result = await res.json();
+    try {
+        const response = await fetch(`./get_lyrics?query=${encodeURIComponent(query)}`);
+        const res = await response.json();
+        const data = res.data || res;
 
-            // Intercept dynamic missing package events for runner.py overlay
-            if (res.status === 422 && result.requires_installation) {
-                window.parent.postMessage({
-                    type: 'MISSING_DEPENDENCY',
-                    appName: appId,
-                    package_name: result.missing_package
-                }, '*');
-                btn.disabled = false;
-                btn.innerText = "Retry Fetch";
-                return;
-            }
-
-            if (result.success && result.data) {
-                const data = result.data;
-                if (data.error) {
-                    output.value = "Error: " + data.error;
-                } else {
-                    meta.innerText = `Status: ${data.status_code} | Bytes: ${data.length}`;
-                    output.value = data.html;
-                }
+        if (data.success) {
+            status.textContent = "";
+            if (data.is_synced && data.parsed.length > 0) {
+                parsedLyrics = data.parsed;
+                renderSyncedLyrics(parsedLyrics);
+                setupTimeline(parsedLyrics);
+                syncBar.classList.remove("hidden");
             } else {
-                output.value = "Failed: " + (result.error || "Unknown execution error");
+                syncBar.classList.add("hidden");
+                container.innerHTML = `<pre class="whitespace-pre-wrap font-sans text-sm text-gray-300 line-clamp-none">${data.raw}</pre>`;
             }
+        } else {
+            status.textContent = data.message || "Lyrics unavailable.";
+            container.innerHTML = `<div class="text-center text-gray-500 text-sm mt-12">No results found.</div>`;
+            syncBar.classList.add("hidden");
+        }
+    } catch (e) {
+        status.textContent = "Failed to communicate with backend execution environment.";
+        container.innerHTML = `<div class="text-center text-red-500 text-sm mt-12">Error loading lyrics.</div>`;
+    } finally {
+        btn.disabled = false;
+    }
+}
 
-        } catch (err) {
-            output.value = "Execution Exception: " + err.message;
-        } finally {
-            btn.disabled = false;
-            btn.innerText = "Fetch Jumia HTML";
+function renderSyncedLyrics(lines) {
+    const container = document.getElementById("lyrics-container");
+    container.innerHTML = "";
+    lines.forEach((line, index) => {
+        const div = document.createElement("div");
+        div.id = `line-${index}`;
+        div.className = "lyric-line text-gray-400 text-base py-1 cursor-pointer hover:text-white";
+        div.textContent = line.text;
+        div.onclick = () => {
+            document.getElementById("timeline").value = line.time;
+            syncLyricsToTime(line.time);
+        };
+        container.appendChild(div);
+    });
+}
+
+function setupTimeline(lines) {
+    const timeline = document.getElementById("timeline");
+    const maxTime = lines[lines.length - 1].time + 5;
+    timeline.max = maxTime;
+    timeline.value = 0;
+    document.getElementById("time-display").textContent = "0:00";
+}
+
+function syncLyricsToTime(currentTime) {
+    const m = Math.floor(currentTime / 60);
+    const s = Math.floor(currentTime % 60);
+    document.getElementById("time-display").textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+
+    let activeIndex = -1;
+    for (let i = 0; i < parsedLyrics.length; i++) {
+        if (currentTime >= parsedLyrics[i].time) {
+            activeIndex = i;
+        } else {
+            break;
         }
     }
-</script>
 
+    parsedLyrics.forEach((_, idx) => {
+        const el = document.getElementById(`line-${idx}`);
+        if (el) {
+            if (idx === activeIndex) {
+                el.classList.add("active");
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            } else {
+                el.classList.remove("active");
+            }
+        }
+    });
+}
+</script>
 </body>
 </html>

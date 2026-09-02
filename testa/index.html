@@ -246,15 +246,20 @@ async function checkInstallStatus() {
 
     try {
         const response = await fetch(`/runner/api/${APP_NAME}/get_install_status`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
         const res = await response.json();
         const data = res.data || res;
 
-        if (data.is_installed || data.ready) {
+        if (data.is_installed) {
             dot.className = "w-2 h-2 rounded-full bg-[#1db954]";
             label.textContent = "Engine Ready";
         } else if (data.is_installing) {
             dot.className = "w-2 h-2 rounded-full bg-yellow-400 animate-ping";
-            label.textContent = "Installing dependencies...";
+            label.textContent = data.message || "Installing dependencies...";
+        } else {
+            dot.className = "w-2 h-2 rounded-full bg-red-500";
+            label.textContent = data.message || "Engine Error";
         }
     } catch (e) {
         dot.className = "w-2 h-2 rounded-full bg-red-500";
@@ -313,7 +318,7 @@ async function addAndPlayTrack() {
                 playTrack(trackIndex);
             }
         } else {
-            showError(res.error || "Track not found or streaming restricted.");
+            showError(res.error || data.error || "Track not found or streaming restricted.");
         }
     } catch (e) {
         showError("Failed to connect to backend server.");
@@ -334,13 +339,14 @@ function pollDownloadStatus(index) {
         try {
             const res = await fetch(`/runner/api/${APP_NAME}/check_file_status?file_name=${encodeURIComponent(playlist[index].file_name)}`);
             const data = await res.json();
+            const resData = data.data || data;
             
             if (playlist[index].download_progress < 90) {
                 playlist[index].download_progress += 10;
                 renderQueue();
             }
 
-            if (data.is_saved) {
+            if (resData.is_saved) {
                 playlist[index].is_saved = true;
                 playlist[index].download_progress = 100;
                 savePlaylist();
@@ -506,7 +512,8 @@ async function fetchLyricsForTrack(query) {
 
     try {
         const res = await fetch(`/runner/api/${APP_NAME}/get_lyrics?query=${encodeURIComponent(query)}`);
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data || json;
         
         if (data.success) {
             currentLyricsData = data;
@@ -589,4 +596,4 @@ playlist.forEach((track, idx) => {
 renderQueue();
 </script>
 </body>
-    </html>
+</html>

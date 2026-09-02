@@ -63,12 +63,10 @@
     </footer>
 
 <script>
-// Auto-detect the backend app route from current window path
+// Reliable route resolution targeting the runner API
 const pathSegments = window.location.pathname.split('/').filter(Boolean);
 const APP_NAME = pathSegments.length > 0 ? pathSegments[pathSegments.length - 1] : 'backup';
-const API_BASE = window.location.pathname.includes('/runner/api/') 
-    ? window.location.pathname.replace(/\/$/, '')
-    : `/runner/api/${APP_NAME}`;
+const API_BASE = `/runner/api/${APP_NAME}`;
 
 let parsedLyrics = [];
 let isEngineReady = false;
@@ -80,11 +78,8 @@ async function monitorEngine() {
     const placeholder = document.getElementById("placeholder");
 
     try {
-        // Try absolute route path first, fallback to relative
-        let res = await fetch(`${API_BASE}/get_install_status`);
-        if (!res.ok) {
-            res = await fetch(`./get_install_status`);
-        }
+        const res = await fetch(`${API_BASE}/get_install_status`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const responseData = await res.json();
         const data = responseData.data || responseData;
@@ -99,7 +94,7 @@ async function monitorEngine() {
             }
         } else if (data.installing) {
             dot.className = "w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse";
-            text.textContent = data.message || "Installing modules...";
+            text.textContent = data.message || "Installing dependencies...";
             btn.disabled = true;
             setTimeout(monitorEngine, 2000);
         } else if (data.error) {
@@ -130,11 +125,7 @@ async function fetchLyrics() {
     container.innerHTML = `<div class="text-center text-gray-400 text-sm mt-12">Searching lyrics for "${query}"...</div>`;
 
     try {
-        let response = await fetch(`${API_BASE}/get_lyrics?query=${encodeURIComponent(query)}`);
-        if (!response.ok) {
-            response = await fetch(`./get_lyrics?query=${encodeURIComponent(query)}`);
-        }
-
+        const response = await fetch(`${API_BASE}/get_lyrics?query=${encodeURIComponent(query)}`);
         const res = await response.json();
         const data = res.data || res;
 
@@ -153,7 +144,7 @@ async function fetchLyrics() {
             syncBar.classList.add("hidden");
         }
     } catch (e) {
-        container.innerHTML = `<div class="text-center text-red-500 text-sm mt-12">Error communicating with backend execution engine.</div>`;
+        container.innerHTML = `<div class="text-center text-red-500 text-sm mt-12">Error communicating with engine.</div>`;
     } finally {
         btn.disabled = false;
     }

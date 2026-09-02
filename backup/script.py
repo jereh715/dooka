@@ -1,10 +1,8 @@
 import os
 import sys
-import re
 import threading
 import importlib
 
-# Setup local storage directory for dependencies
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LIB_DIR = os.path.join(BASE_DIR, "lyrics_libs")
 
@@ -15,53 +13,68 @@ if LIB_DIR not in sys.path:
 STATUS = {
     "ready": False,
     "installing": False,
+    "message": "Initializing...",
     "error": None
 }
 
-def _install_syncedlyrics():
+def install_dependencies():
     global STATUS
     STATUS["installing"] = True
+    STATUS["message"] = "Installing syncedlyrics & dependencies..."
+    
     try:
         import runpy
-        sys.argv = ['pip', 'install', '--target', LIB_DIR, 'syncedlyrics', '--no-deps', '--quiet']
+        # Install with full dependencies so required packages like rapidfuzz/requests are available
+        sys.argv = ['pip', 'install', '--target', LIB_DIR, 'syncedlyrics', '--quiet']
         runpy.run_module('pip', run_name='__main__')
+        
         importlib.invalidate_caches()
         STATUS["ready"] = True
-    except Exception as e:
-        STATUS["error"] = str(e)
-    finally:
         STATUS["installing"] = False
+        STATUS["message"] = "Engine Ready"
+    except Exception as e:
+        STATUS["installing"] = False
+        STATUS["error"] = str(e)
+        STATUS["message"] = f"Install failed: {str(e)}"
 
-def check_engine():
+def check_or_start_engine():
+    global STATUS
     try:
         import syncedlyrics
         STATUS["ready"] = True
+        STATUS["message"] = "Ready"
         return True
     except ImportError:
         if not STATUS["installing"]:
-            threading.Thread(target=_install_syncedlyrics, daemon=True).start()
+            thread = threading.Thread(target=install_dependencies, daemon=True)
+            thread.start()
         return False
 
+# Trigger background check/install on load
+check_or_start_engine()
+
+def get_install_status(params=None):
+    check_or_start_engine()
+    return STATUS
+
 def parse_lrc(lrc_text):
-    """Converts raw LRC string format into structured time/text records."""
     if not lrc_text:
         return []
-    
+    import re
     parsed = []
     pattern = re.compile(r'\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)')
-    
     for line in lrc_text.splitlines():
         match = pattern.match(line.strip())
         if match:
-            minutes, seconds, millis, text = match.groups()
-            time_sec = int(minutes) * 60 + int(seconds) + int(millis) / (1000 if len(millis) == 3 else 100)
+            m, s, ms, text = match.groups()
+            time_sec = int(m) * 60 + int(s) + int(ms) / (1000 if len(ms) == 3 else 100)
             if text.strip():
                 parsed.append({"time": time_sec, "text": text.strip()})
     return parsed
 
 def get_lyrics(params=None):
-    if not check_engine():
-        return {"error": "Engine initializing. Please try again shortly."}
+    if not check_or_start_engine():
+        return {"error": f"Engine not ready: {STATUS['message']}"}
 
     if not params or not params.get("query"):
         return {"error": "Search query parameter required."}
@@ -85,4 +98,4 @@ def get_lyrics(params=None):
             "parsed": parse_lrc(lrc_raw) if is_synced else []
         }
     except Exception as e:
-        return {"error": f"Search failed: {str(e)}"}
+        return {"error": f"Extraction error: {str(e)}"}

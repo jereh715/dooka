@@ -65,12 +65,15 @@ def install_ytdlp_background():
     except Exception as e1:
         print(f"[RUNPY PIP FAILED]: {e1}")
 
-    # Method 2: Direct Zip Archive Extraction Fallback
+    # Method 2: Direct Zip Archive Extraction Fallback (with Timeout & Headers)
     try:
         INSTALLATION_STATUS["message"] = "Downloading zip archive..."
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
         target_zip = os.path.join(LOCAL_LIB_DIR, "yt_dlp_zip.zip")
-        urllib.request.urlretrieve(url, target_zip)
+        
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=15) as response, open(target_zip, 'wb') as out_file:
+            out_file.write(response.read())
         
         with zipfile.ZipFile(target_zip, 'r') as zip_ref:
             zip_ref.extractall(LOCAL_LIB_DIR)
@@ -85,7 +88,9 @@ def install_ytdlp_background():
         INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
     except Exception as e2:
         INSTALLATION_STATUS["is_installing"] = False
-        INSTALLATION_STATUS["error"] = f"Installation error: {str(e2)}"
+        INSTALLATION_STATUS["is_installed"] = False
+        INSTALLATION_STATUS["error"] = str(e2)
+        INSTALLATION_STATUS["message"] = f"Engine error: {str(e2)}"
 
 def check_or_start_install():
     global INSTALLATION_STATUS
@@ -103,17 +108,23 @@ def check_or_start_install():
 
 def get_install_status(params=None):
     check_or_start_install()
-    return INSTALLATION_STATUS
+    return {
+        "success": True,
+        "is_installed": INSTALLATION_STATUS.get("is_installed", False),
+        "is_installing": INSTALLATION_STATUS.get("is_installing", False),
+        "message": INSTALLATION_STATUS.get("message", "Unknown"),
+        "error": INSTALLATION_STATUS.get("error")
+    }
 
 # 4. Audio Streaming & File Operations
 def stream_and_trigger_download(params=None):
     if not check_or_start_install():
-        return {"error": f"yt-dlp not ready: {INSTALLATION_STATUS['message']}"}
+        return {"success": False, "error": f"yt-dlp not ready: {INSTALLATION_STATUS['message']}"}
 
     import yt_dlp
 
     if not params or not params.get("query"):
-        return {"error": "No query provided."}
+        return {"success": False, "error": "No query provided."}
 
     query = params.get("query")
 
@@ -140,7 +151,7 @@ def stream_and_trigger_download(params=None):
             is_saved = os.path.exists(file_path)
 
             if not stream_url and not is_saved:
-                return {"error": "No playable stream found."}
+                return {"success": False, "error": "No playable stream found."}
 
             if not is_saved:
                 thread = threading.Thread(target=_silent_download_worker, args=(query, file_path))
@@ -159,7 +170,7 @@ def stream_and_trigger_download(params=None):
             }
 
     except Exception as e:
-        return {"error": f"Extraction error: {str(e)}"}
+        return {"success": False, "error": f"Extraction error: {str(e)}"}
 
 def _silent_download_worker(query, target_path):
     import yt_dlp
@@ -180,22 +191,22 @@ def _silent_download_worker(query, target_path):
 
 def check_file_status(params=None):
     if not params or not params.get("file_name"):
-        return {"is_saved": False}
+        return {"success": True, "is_saved": False}
     file_path = os.path.join(DOWNLOAD_DIR, params.get("file_name"))
-    return {"is_saved": os.path.exists(file_path)}
+    return {"success": True, "is_saved": os.path.exists(file_path)}
 
 def get_local_audio(params=None):
     if not params or not params.get("file_name"):
-        return {"error": "No file name provided."}
+        return {"success": False, "error": "No file name provided."}
     file_name = params.get("file_name")
     file_path = os.path.join(DOWNLOAD_DIR, file_name)
     if os.path.exists(file_path):
-        return {"file_path": file_path, "is_saved": True}
-    return {"error": "File not found.", "is_saved": False}
+        return {"success": True, "file_path": file_path, "is_saved": True}
+    return {"success": False, "error": "File not found.", "is_saved": False}
 
 def delete_local_file(params=None):
     if not params or not params.get("file"):
-        return {"error": "No file name provided."}
+        return {"success": False, "error": "No file name provided."}
     
     file_path = os.path.join(DOWNLOAD_DIR, params.get("file"))
     if os.path.exists(file_path):
@@ -203,8 +214,8 @@ def delete_local_file(params=None):
             os.remove(file_path)
             return {"success": True}
         except Exception as e:
-            return {"error": f"Failed to delete file: {str(e)}"}
-    return {"error": "File not found."}
+            return {"success": False, "error": f"Failed to delete file: {str(e)}"}
+    return {"success": False, "error": "File not found."}
 
 # 5. Lyrics Parsing and Fetching
 def parse_lrc(lrc_text):
@@ -223,7 +234,7 @@ def parse_lrc(lrc_text):
 
 def get_lyrics(params=None):
     if not params or not params.get("query"):
-        return {"error": "Search query parameter required."}
+        return {"success": False, "error": "Search query parameter required."}
 
     query = params.get("query").strip()
     

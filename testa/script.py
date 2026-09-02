@@ -5,17 +5,16 @@ import zipfile
 import urllib.request
 import importlib
 
-# 1. Safe Dynamic Import for Chaquopy Context
+# 1. Safe Dynamic Import for Chaquopy / Standalone Execution
 APP_FILES_DIR = None
 
 try:
-    # Safely import Java package at runtime without triggering static analyzers
     chaquopy_mod = importlib.import_module("com.chaquopy.python")
     Python = getattr(chaquopy_mod, "Python")
     context = Python.getPlatform().getApplication()
     APP_FILES_DIR = str(context.getFilesDir().getAbsolutePath())
-except (ImportError, ModuleNotFoundError, AttributeException, Exception) as e:
-    # Fallback when running outside Android or during host static analysis
+except (ImportError, ModuleNotFoundError, AttributeError, Exception):
+    # Fallback when running inside standard Python web host or app runner environment
     APP_FILES_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 2. Configure Storage Paths
@@ -40,6 +39,7 @@ def install_ytdlp_background():
     INSTALLATION_STATUS["is_installing"] = True
     INSTALLATION_STATUS["message"] = "Downloading yt-dlp..."
 
+    # Method 1: In-Process Installation via runpy (Chaquopy Safe)
     try:
         import runpy
         sys.argv = ['pip', 'install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet']
@@ -61,6 +61,7 @@ def install_ytdlp_background():
     except Exception as e1:
         print(f"[RUNPY PIP FAILED]: {e1}")
 
+    # Method 2: Direct Zip Archive Extraction Fallback
     try:
         INSTALLATION_STATUS["message"] = "Downloading zip archive..."
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"

@@ -11,12 +11,14 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #282828; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #3e3e3e; }
+        .lyric-line { transition: color 0.2s ease, transform 0.2s ease, font-size 0.2s ease; }
+        .lyric-active { color: #ffffff !important; font-weight: 700; scale: 1.03; origin-left; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden select-none">
 
     <!-- Top & Main Container -->
-    <div class="flex-1 flex overflow-hidden p-2 gap-2">
+    <div class="flex-1 flex overflow-hidden p-2 gap-2 relative">
 
         <!-- Sidebar Navigation (Desktop) -->
         <aside class="w-64 bg-[#121212] rounded-lg p-4 flex flex-col justify-between shrink-0 hidden md:flex">
@@ -93,6 +95,23 @@
                 <div id="queue-list" class="space-y-1"></div>
             </div>
         </main>
+
+        <!-- Spotify-style Side Lyrics Overlay Panel -->
+        <aside id="lyrics-panel" class="w-full md:w-80 bg-[#121212] rounded-lg p-6 flex flex-col justify-between shrink-0 hidden border-l border-[#282828]/50 shadow-2xl transition-all duration-300">
+            <div class="flex items-center justify-between pb-4 border-b border-[#282828]">
+                <h3 class="text-white font-bold text-base flex items-center gap-2">
+                    <svg class="w-5 h-5 text-[#1db954]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                    Lyrics
+                </h3>
+                <button onclick="toggleLyricsPanel()" class="text-gray-400 hover:text-white transition">
+                    ✕
+                </button>
+            </div>
+            
+            <div id="lyrics-container" class="flex-1 overflow-y-auto my-4 space-y-4 pr-2 text-left font-semibold text-lg md:text-xl text-gray-500">
+                <div class="text-sm text-gray-500 text-center py-10 italic">Select a track to load lyrics</div>
+            </div>
+        </aside>
     </div>
 
     <!-- Bottom Player Bar -->
@@ -130,11 +149,14 @@
             </div>
         </div>
 
-        <!-- Source Badge -->
-        <div class="w-1/3 flex justify-end items-center gap-2">
+        <!-- Source Badge & Lyrics Toggle -->
+        <div class="w-1/3 flex justify-end items-center gap-3">
             <span id="source-indicator" class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-[#282828] text-gray-400 font-bold hidden md:inline-block">
                 Ready
             </span>
+            <button id="lyrics-btn" onclick="toggleLyricsPanel()" class="text-gray-400 hover:text-white transition p-2 rounded-full hover:bg-[#282828]" title="Toggle Lyrics">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/></svg>
+            </button>
         </div>
 
         <audio id="audio-player" class="hidden"></audio>
@@ -146,6 +168,8 @@ const STORAGE_KEY = "hybrid_playlist_vault";
 
 let playlist = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 let currentTrackIndex = -1;
+let currentLyricsData = null;
+let activeLyricIndex = -1;
 
 const audioPlayer = document.getElementById("audio-player");
 const seekBar = document.getElementById("seek-bar");
@@ -161,6 +185,9 @@ audioPlayer.addEventListener("timeupdate", () => {
         seekBar.value = pct;
         document.getElementById("current-time").textContent = formatTime(audioPlayer.currentTime);
         document.getElementById("total-duration").textContent = formatTime(audioPlayer.duration);
+        
+        // Sync timestamped lyrics if available
+        updateActiveLyric(audioPlayer.currentTime);
     }
 });
 
@@ -222,9 +249,9 @@ async function checkInstallStatus() {
         const res = await response.json();
         const data = res.data || res;
 
-        if (data.is_installed) {
+        if (data.is_installed || data.ready) {
             dot.className = "w-2 h-2 rounded-full bg-[#1db954]";
-            label.textContent = "yt-dlp Engine Ready";
+            label.textContent = "Engine Ready";
         } else if (data.is_installing) {
             dot.className = "w-2 h-2 rounded-full bg-yellow-400 animate-ping";
             label.textContent = "Installing dependencies...";
@@ -319,7 +346,6 @@ function pollDownloadStatus(index) {
                 savePlaylist();
                 clearInterval(pollInterval);
 
-                // Switch player source to local file if current active track just completed download
                 if (currentTrackIndex === index) {
                     const currentPos = audioPlayer.currentTime;
                     const wasPlaying = !audioPlayer.paused;
@@ -399,7 +425,6 @@ async function playTrack(index) {
     document.getElementById("track-artist").textContent = track.artist;
     document.getElementById("track-thumb").src = track.thumbnail;
 
-    // Use persistent local file endpoint when saved; fallback to stream URL
     if (track.is_saved) {
         audioPlayer.src = `/runner/api/${APP_NAME}/get_local_audio?file_name=${encodeURIComponent(track.file_name)}`;
         sourceIndicator.textContent = "Persistent Storage";
@@ -412,6 +437,7 @@ async function playTrack(index) {
 
     audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
     renderQueue();
+    fetchLyricsForTrack(`${track.title} ${track.artist}`);
 }
 
 function playNextTrack() {
@@ -429,7 +455,6 @@ function playPreviousTrack() {
 async function deleteTrack(index) {
     const track = playlist[index];
 
-    // Pause player and clear handle on Android to prevent file locks
     if (currentTrackIndex === index) {
         audioPlayer.pause();
         audioPlayer.removeAttribute('src');
@@ -452,11 +477,108 @@ async function deleteTrack(index) {
             document.getElementById("track-artist").textContent = "---";
             document.getElementById("track-thumb").src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E";
             document.getElementById("source-indicator").classList.add("hidden");
+            resetLyricsDisplay();
         }
     } else if (currentTrackIndex > index) {
         currentTrackIndex--;
     }
     savePlaylist();
+}
+
+// --- Lyrics Controller ---
+function toggleLyricsPanel() {
+    const panel = document.getElementById("lyrics-panel");
+    const btn = document.getElementById("lyrics-btn");
+    
+    panel.classList.toggle("hidden");
+    if (!panel.classList.contains("hidden")) {
+        btn.classList.add("text-[#1db954]");
+    } else {
+        btn.classList.remove("text-[#1db954]");
+    }
+}
+
+async function fetchLyricsForTrack(query) {
+    const container = document.getElementById("lyrics-container");
+    container.innerHTML = '<div class="text-sm text-gray-400 text-center py-10 flex justify-center items-center gap-2"><span class="animate-spin">⏳</span> Searching lyrics...</div>';
+    currentLyricsData = null;
+    activeLyricIndex = -1;
+
+    try {
+        const res = await fetch(`/runner/api/${APP_NAME}/get_lyrics?query=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        
+        if (data.success) {
+            currentLyricsData = data;
+            renderLyrics(data);
+        } else {
+            container.innerHTML = `<div class="text-sm text-gray-500 text-center py-10">${data.message || 'No lyrics available.'}</div>`;
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="text-sm text-red-400 text-center py-10">Failed to fetch lyrics.</div>';
+    }
+}
+
+function renderLyrics(lyricsObj) {
+    const container = document.getElementById("lyrics-container");
+    container.innerHTML = "";
+
+    if (lyricsObj.is_synced && lyricsObj.parsed.length > 0) {
+        lyricsObj.parsed.forEach((line, index) => {
+            const p = document.createElement("p");
+            p.id = `lyric-line-${index}`;
+            p.className = "lyric-line hover:text-white cursor-pointer py-1 transition-all";
+            p.textContent = line.text;
+            p.onclick = () => {
+                audioPlayer.currentTime = line.time;
+            };
+            container.appendChild(p);
+        });
+    } else if (lyricsObj.raw) {
+        lyricsObj.raw.split("\n").forEach(line => {
+            if (line.trim()) {
+                const p = document.createElement("p");
+                p.className = "text-gray-300 py-1 text-base";
+                p.textContent = line;
+                container.appendChild(p);
+            }
+        });
+    }
+}
+
+function updateActiveLyric(currentTime) {
+    if (!currentLyricsData || !currentLyricsData.is_synced || !currentLyricsData.parsed.length) return;
+
+    const parsed = currentLyricsData.parsed;
+    let newIndex = -1;
+
+    for (let i = 0; i < parsed.length; i++) {
+        if (currentTime >= parsed[i].time) {
+            newIndex = i;
+        } else {
+            break;
+        }
+    }
+
+    if (newIndex !== activeLyricIndex && newIndex !== -1) {
+        if (activeLyricIndex !== -1) {
+            const prevEl = document.getElementById(`lyric-line-${activeLyricIndex}`);
+            if (prevEl) prevEl.classList.remove("lyric-active");
+        }
+        
+        const newEl = document.getElementById(`lyric-line-${newIndex}`);
+        if (newEl) {
+            newEl.classList.add("lyric-active");
+            newEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        activeLyricIndex = newIndex;
+    }
+}
+
+function resetLyricsDisplay() {
+    currentLyricsData = null;
+    activeLyricIndex = -1;
+    document.getElementById("lyrics-container").innerHTML = '<div class="text-sm text-gray-500 text-center py-10 italic">Select a track to load lyrics</div>';
 }
 
 // Restore & Poll unfinished tracks on startup

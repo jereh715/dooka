@@ -174,20 +174,34 @@ def stream_and_trigger_download(params=None):
 
 def _silent_download_worker(query, target_path):
     import yt_dlp
+    
+    # Download to an isolated temporary file to avoid breaking active stream handles
+    temp_path = f"{target_path}.tmp"
+    
     ydl_opts = {
         'format': 'worstaudio[ext=m4a]/worstaudio[ext=webm]/worstaudio/worst',
-        'outtmpl': target_path,
+        'outtmpl': temp_path,
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
         'default_search': 'ytsearch1',
         'nocheckcertificate': True,
+        'overwrites': True
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([f"ytsearch1:{query}"])
+        
+        # Atomically move the completed download to target path
+        if os.path.exists(temp_path):
+            os.replace(temp_path, target_path)
     except Exception as e:
         print(f"Background download failed for {query}: {e}")
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
 
 def check_file_status(params=None):
     if not params or not params.get("file_name"):

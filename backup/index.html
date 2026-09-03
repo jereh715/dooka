@@ -2,195 +2,402 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Bouncing Balls Escape Simulation</title>
+  <title>3D Marble Race Simulator</title>
   <style>
     body {
-      background-color: #111;
-      color: #fff;
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
       margin: 0;
       overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #000;
+      color: #fff;
     }
-    canvas {
-      background-color: #1a1a1a;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
-      border-radius: 8px;
+    #ui {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 15px 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      text-align: center;
+      backdrop-filter: blur(5px);
     }
-    #info {
-      margin-top: 15px;
-      font-size: 1.1rem;
-      letter-spacing: 0.5px;
+    h2 { margin: 0 0 10px 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
+    .bet-buttons { display: flex; gap: 10px; margin-bottom: 12px; }
+    button.bet-btn {
+      border: 2px solid transparent;
+      padding: 8px 16px;
+      border-radius: 6px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
     }
+    button.bet-btn:hover { transform: scale(1.05); }
+    button.selected { border-color: #fff; box-shadow: 0 0 10px #fff; }
+    
+    #start-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      font-size: 1rem;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+    }
+    #start-btn:disabled { background: #555; cursor: not-allowed; }
+    #status { margin-top: 10px; font-weight: bold; font-size: 1.1rem; }
   </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 </head>
 <body>
 
-  <canvas id="simCanvas" width="600" height="600"></canvas>
-  <div id="info">Ball Count: <span id="count">1</span></div>
+  <div id="ui">
+    <h2>Select Your Ball to Bet</h2>
+    <div class="bet-buttons">
+      <button class="bet-btn" style="background: #ff4757;" onclick="selectBet('Red', 0ff4757)">Red</button>
+      <button class="bet-btn" style="background: #1e90ff;" onclick="selectBet('Blue', 0x1e90ff)">Blue</button>
+      <button class="bet-btn" style="background: #eccc68; color:#000;" onclick="selectBet('Yellow', 0xeccc68)">Yellow</button>
+      <button class="bet-btn" style="background: #2ed573;" onclick="selectBet('Green', 0x2ed573)">Green</button>
+    </div>
+    <button id="start-btn" onclick="startRace()" disabled>Choose a Ball</button>
+    <div id="status"></div>
+  </div>
 
   <script>
-    const canvas = document.getElementById('simCanvas');
-    const ctx = canvas.getContext('2d');
-    const countDisplay = document.getElementById('count');
+    // --- Global Setup ---
+    let scene, camera, renderer, world;
+    let selectedColorName = null;
+    let raceInProgress = false;
+    let winner = null;
 
-    // Simulation parameters
-    const center = { x: canvas.width / 2, y: canvas.height / 2 };
-    const circleRadius = 220;
-    const holeAngleSize = Math.PI / 4; // 45-degree hole
-    let rotationAngle = 0;
-    const rotationSpeed = 0.01; // Speed of circle rotation
-    const gravity = 0.2;
-    const maxBalls = 300; // Cap to prevent performance lag
+    const balls = [];
+    const ballConfigs = [
+      { name: 'Red', color: 0xff4757 },
+      { name: 'Blue', color: 0x1e90ff },
+      { name: 'Yellow', color: 0xeccc68 },
+      { name: 'Green', color: 0x2ed573 }
+    ];
 
-    // Ball template
-    class Ball {
-      constructor(x, y, vx, vy, radius) {
-        this.x = x;
-        this.y = y;
-        this.vx = vx;
-        this.vy = vy;
-        this.radius = radius;
-        this.color = `hsl(${Math.random() * 360}, 100%, 60%)`;
-        this.isEscaped = false;
-      }
+    const materials = {};
 
-      update() {
-        this.vy += gravity;
-        this.x += this.vx;
-        this.y += this.vy;
-      }
+    function init() {
+      // 1. Three.js Scene Setup
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f0f1a);
+      scene.fog = new THREE.FogExp2(0x0f0f1a, 0.015);
 
-      draw() {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
-        ctx.fill();
-        ctx.closePath();
-      }
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      document.body.appendChild(renderer.domElement);
+
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(20, 40, 20);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      scene.add(dirLight);
+
+      // 2. Cannon.js Physics Setup
+      world = new CANNON.World();
+      world.gravity.set(0, -18, 0); // Slightly heavier gravity for fast action
+
+      // Physics Materials
+      materials.ground = new CANNON.Material("ground");
+      materials.ball = new CANNON.Material("ball");
+
+      const ballGroundContact = new CANNON.ContactMaterial(materials.ground, materials.ball, {
+        friction: 0.1,
+        restitution: 0.5
+      });
+      world.addContactMaterial(ballGroundContact);
+
+      // 3. Build Course & Spawn Entities
+      generateRandomTrack();
+      createBalls();
+
+      // Window resize listener
+      window.addEventListener('resize', onWindowResize);
+
+      // Animation Loop
+      animate();
     }
 
-    let balls = [new Ball(center.x, center.y - 50, (Math.random() - 0.5) * 4, 2, 10)];
+    // --- Track Builder ---
+    function generateRandomTrack() {
+      let currentY = 0;
+      let currentZ = 0;
+      const stepCount = 10;
 
-    // Utility: Normalize angle between 0 and 2*PI
-    function normalizeAngle(angle) {
-      return (angle % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-    }
+      for (let i = 0; i < stepCount; i++) {
+        // Main Ramp
+        const rampWidth = 10;
+        const rampLength = 20;
+        const tilt = (Math.random() - 0.5) * 0.4; // Alternate left/right tilt
 
-    function checkCircleCollision(ball) {
-      if (ball.isEscaped) return;
+        createRamp(0, currentY, currentZ, rampWidth, rampLength, -0.35, tilt);
 
-      const dx = ball.x - center.x;
-      const dy = ball.y - center.y;
-      const dist = Math.hypot(dx, dy);
-
-      // Check if ball touches or passes the circle boundary
-      if (dist + ball.radius >= circleRadius) {
-        // Calculate impact angle relative to center
-        let impactAngle = normalizeAngle(Math.atan2(dy, dx));
-        
-        // Define hole boundaries based on current rotation
-        let holeStart = normalizeAngle(rotationAngle);
-        let holeEnd = normalizeAngle(rotationAngle + holeAngleSize);
-
-        let isInHole = false;
-        if (holeStart < holeEnd) {
-          isInHole = impactAngle >= holeStart && impactAngle <= holeEnd;
-        } else {
-          // Wraps around 2*PI
-          isInHole = impactAngle >= holeStart || impactAngle <= holeEnd;
+        // Add random obstacles on ramps
+        const obstacleCount = Math.floor(Math.random() * 3) + 2;
+        for (let j = 0; j < obstacleCount; j++) {
+          const ox = (Math.random() - 0.5) * (rampWidth - 2);
+          const oz = currentZ + (Math.random() * (rampLength - 4)) - (rampLength / 2);
+          createPeg(ox, currentY - (oz - currentZ) * 0.35, oz);
         }
 
-        if (isInHole) {
-          // Ball escapes through the gap
-          ball.isEscaped = true;
-          duplicateBall(ball);
-        } else {
-          // Bounce inside the circle
-          const nx = dx / dist;
-          const ny = dy / dist;
-
-          // Reposition ball inside boundary
-          ball.x = center.x + nx * (circleRadius - ball.radius);
-          ball.y = center.y + ny * (circleRadius - ball.radius);
-
-          // Reflect velocity vector
-          const dotProduct = ball.vx * nx + ball.vy * ny;
-          ball.vx = (ball.vx - 2 * dotProduct * nx) * 0.98; // 0.98 restitution for damping
-          ball.vy = (ball.vy - 2 * dotProduct * ny) * 0.98;
-        }
+        currentY -= rampLength * 0.35 + 2;
+        currentZ += rampLength - 2;
       }
+
+      // Final Catch Basin (Finish Line)
+      createFinishLine(0, currentY - 2, currentZ + 5);
     }
 
-    function duplicateBall(escapedBall) {
-      if (balls.length >= maxBalls) return;
+    function createRamp(x, y, z, width, length, rotX, rotZ) {
+      // Three.js Visual
+      const geometry = new THREE.BoxGeometry(width, 0.5, length);
+      const material = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.2 });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.receiveShadow = true;
+      scene.add(mesh);
 
-      // Spawn two new balls back at the center with fresh random trajectories
-      for (let i = 0; i < 2; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 3 + Math.random() * 3;
-        balls.push(new Ball(
-          center.x,
-          center.y,
-          Math.cos(angle) * speed,
-          Math.sin(angle) * speed,
-          escapedBall.radius
-        ));
-      }
+      // Cannon.js Body
+      const shape = new CANNON.Box(new CANNON.Vec3(width / 2, 0.25, length / 2));
+      const body = new CANNON.Body({ mass: 0, material: materials.ground });
+      body.addShape(shape);
+
+      // Set Position & Quaternion Rotation
+      body.position.set(x, y, z);
+      const euler = new THREE.Euler(rotX, 0, rotZ, 'XYZ');
+      const q = new THREE.Quaternion().setFromEuler(euler);
+      body.quaternion.set(q.x, q.y, q.z, q.w);
+
+      mesh.position.copy(body.position);
+      mesh.quaternion.copy(body.quaternion);
+
+      world.addBody(body);
+
+      // Side Guard Rails
+      createRail(x - width / 2, y + 0.5, z, length, rotX, rotZ);
+      createRail(x + width / 2, y + 0.5, z, length, rotX, rotZ);
     }
 
-    function drawRotatingContainer() {
-      ctx.save();
-      ctx.lineWidth = 8;
-      ctx.strokeStyle = '#ffffff';
+    function createRail(x, y, z, length, rotX, rotZ) {
+      const shape = new CANNON.Box(new CANNON.Vec3(0.2, 0.6, length / 2));
+      const body = new CANNON.Body({ mass: 0, material: materials.ground });
+      body.addShape(shape);
+      body.position.set(x, y, z);
+      
+      const euler = new THREE.Euler(rotX, 0, rotZ, 'XYZ');
+      const q = new THREE.Quaternion().setFromEuler(euler);
+      body.quaternion.set(q.x, q.y, q.z, q.w);
 
-      // Draw arc with a gap (hole)
-      ctx.beginPath();
-      ctx.arc(
-        center.x,
-        center.y,
-        circleRadius,
-        rotationAngle + holeAngleSize,
-        rotationAngle + Math.PI * 2
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 1.2, length),
+        new THREE.MeshStandardMaterial({ color: 0x7f8c8d })
       );
-      ctx.stroke();
-      ctx.restore();
+      mesh.position.copy(body.position);
+      mesh.quaternion.copy(body.quaternion);
+
+      scene.add(mesh);
+      world.addBody(body);
     }
 
-    function animate() {
-      // Clear frame
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    function createPeg(x, y, z) {
+      const radius = 0.4;
+      const height = 1.5;
 
-      // Rotate the container gap
-      rotationAngle = normalizeAngle(rotationAngle + rotationSpeed);
+      const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, height, 16),
+        new THREE.MeshStandardMaterial({ color: 0xe74c3c, metalness: 0.5 })
+      );
+      mesh.castShadow = true;
+      scene.add(mesh);
 
-      drawRotatingContainer();
+      const shape = new CANNON.Cylinder(radius, radius, height, 16);
+      const body = new CANNON.Body({ mass: 0, material: materials.ground });
+      body.addShape(shape);
+      body.position.set(x, y, z);
 
-      // Update and draw balls
-      for (let i = balls.length - 1; i >= 0; i--) {
-        const ball = balls[i];
-        ball.update();
-        checkCircleCollision(ball);
-        ball.draw();
+      mesh.position.copy(body.position);
+      world.addBody(body);
+    }
 
-        // Cleanup balls that fall off screen to keep array lean
-        if (
-          ball.x < -50 || ball.x > canvas.width + 50 ||
-          ball.y < -50 || ball.y > canvas.height + 50
-        ) {
-          balls.splice(i, 1);
+    function createFinishLine(x, y, z) {
+      const geometry = new THREE.BoxGeometry(12, 0.2, 8);
+      const material = new THREE.MeshStandardMaterial({ color: 0x27ae60 });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(x, y, z);
+      scene.add(mesh);
+
+      const shape = new CANNON.Box(new CANNON.Vec3(6, 0.1, 4));
+      const body = new CANNON.Body({ mass: 0, material: materials.ground });
+      body.position.set(x, y, z);
+      body.addShape(shape);
+
+      // Attach finish detection callback
+      body.addEventListener("collide", (e) => {
+        if (!winner && raceInProgress) {
+          const hitBall = balls.find(b => b.body === e.body);
+          if (hitBall) {
+            winner = hitBall.name;
+            endRace();
+          }
         }
+      });
+
+      world.addBody(body);
+    }
+
+    // --- Ball Creation ---
+    function createBalls() {
+      const radius = 0.6;
+      const spacing = 1.8;
+      const startX = -((ballConfigs.length - 1) * spacing) / 2;
+
+      ballConfigs.forEach((config, index) => {
+        // Visual Mesh
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(radius, 32, 32),
+          new THREE.MeshStandardMaterial({
+            color: config.color,
+            roughness: 0.1,
+            metalness: 0.3
+          })
+        );
+        mesh.castShadow = true;
+        scene.add(mesh);
+
+        // Physics Body
+        const shape = new CANNON.Sphere(radius);
+        const body = new CANNON.Body({
+          mass: 1,
+          material: materials.ball,
+          linearDamping: 0.05
+        });
+        body.addShape(shape);
+
+        // Set Initial Staging Positions
+        const spawnPos = new CANNON.Vec3(startX + index * spacing, 3, -8);
+        body.position.copy(spawnPos);
+        body.sleep(); // Keep frozen until race starts
+
+        mesh.position.copy(body.position);
+
+        balls.push({ name: config.name, mesh, body, startPos: spawnPos });
+      });
+    }
+
+    // --- User Interaction & Game Logic ---
+    function selectBet(colorName) {
+      if (raceInProgress) return;
+
+      selectedColorName = colorName;
+      document.querySelectorAll('.bet-btn').forEach(btn => btn.classList.remove('selected'));
+      event.target.classList.add('selected');
+
+      const startBtn = document.getElementById('start-btn');
+      startBtn.disabled = false;
+      startBtn.textContent = `Start Race (Bet on ${colorName})`;
+    }
+
+    function startRace() {
+      if (!selectedColorName || raceInProgress) return;
+
+      raceInProgress = true;
+      winner = null;
+      document.getElementById('status').textContent = "Race in progress...";
+      document.getElementById('start-btn').disabled = true;
+
+      // Unfreeze balls and give them a tiny random jitter to ensure unique runs
+      balls.forEach(ball => {
+        ball.body.wakeUp();
+        ball.body.velocity.set(
+          (Math.random() - 0.5) * 0.5,
+          0,
+          2 + Math.random()
+        );
+      });
+    }
+
+    function endRace() {
+      raceInProgress = false;
+      const statusDiv = document.getElementById('status');
+
+      if (winner === selectedColorName) {
+        statusDiv.textContent = `🎉 You Won! The ${winner} ball finished first!`;
+        statusDiv.style.color = '#2ed573';
+      } else {
+        statusDiv.textContent = `❌ You Lost! The ${winner} ball won the race.`;
+        statusDiv.style.color = '#ff4757';
       }
 
-      countDisplay.textContent = balls.length;
-      requestAnimationFrame(animate);
+      // Reset prompt after a delay
+      setTimeout(() => {
+        document.getElementById('start-btn').disabled = false;
+        document.getElementById('start-btn').textContent = "Play Again";
+      }, 2000);
     }
 
-    animate();
+    // --- Main Loop & Camera Tracking ---
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Step Physics Simulation
+      world.step(1 / 60);
+
+      // Sync Three.js Visual Meshes with Physics Bodies
+      let lowestY = 0;
+      let leadBallPosition = new THREE.Vector3(0, 0, 0);
+
+      balls.forEach(ball => {
+        ball.mesh.position.copy(ball.body.position);
+        ball.mesh.quaternion.copy(ball.body.quaternion);
+
+        // Track the leading ball (lowest Y position) for the camera
+        if (ball.mesh.position.y < lowestY) {
+          lowestY = ball.mesh.position.y;
+          leadBallPosition.copy(ball.mesh.position);
+        }
+      });
+
+      // Dynamic Camera Control
+      if (raceInProgress) {
+        const targetCamPos = new THREE.Vector3(
+          leadBallPosition.x,
+          leadBallPosition.y + 12,
+          leadBallPosition.z - 18
+        );
+        camera.position.lerp(targetCamPos, 0.05);
+        camera.lookAt(leadBallPosition);
+      } else {
+        // Pre-race Overview Angle
+        camera.position.set(0, 8, -22);
+        camera.lookAt(0, 0, 0);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    window.onload = init;
   </script>
 </body>
 </html>

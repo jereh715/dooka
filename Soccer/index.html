@@ -131,6 +131,14 @@
   }
   .you-pill .swatch{ width:14px; height:14px; border-radius:50%; }
 
+  .pan-hint{
+    align-self:center;
+    background: rgba(15,10,40,0.55); border:1px solid var(--panel-edge); backdrop-filter: blur(10px);
+    border-radius: 999px; padding: 7px 16px; font-size:12px; font-weight:700; color:#e6e0ff;
+    opacity: 1; transition: opacity .6s ease;
+    margin: 0 0 8px;
+  }
+  .pan-hint.faded{ opacity: 0; }
   .progress-panel{
     background: rgba(15,10,40,0.55); border:1px solid var(--panel-edge); backdrop-filter: blur(10px);
     border-radius: 18px; padding: 12px 14px; display:flex; flex-direction:column; gap:9px;
@@ -168,6 +176,7 @@
     <div class="you-pill"><span class="swatch" id="youSwatch"></span><span id="youLabel">You: —</span></div>
     <div class="timer-pill" id="timerPill">0.0s</div>
   </div>
+  <div id="panHint" class="pan-hint">Drag to look around</div>
   <div class="progress-panel" id="progressPanel"></div>
 </div>
 
@@ -198,7 +207,7 @@
 
 <div id="tapHint">Tap a marble to begin</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -216,11 +225,12 @@
 
   var GRAVITY_ACCEL = 15.5;
   var DRAG = 0.85;
-  var LATERAL_SPRING = 6.2;
+  var LATERAL_SPRING = 5.0;
   var LATERAL_DAMP = 4.6;
   var BOUNCE_REST = 0.55;
   var WALL_HEIGHT = 3.2;
   var MAX_RACE_TIME = 100;
+  var STALL_TIMEOUT = 3.0; // seconds with no leader progress before an unstick nudge
 
   var clamp = function(v,a,b){ return Math.max(a, Math.min(b,v)); };
   var smooth = function(t){ return t*t*(3-2*t); };
@@ -526,6 +536,8 @@
   var raceEnded = false;
   var elapsed = 0;
   var finishOrder = [];
+  var stallTimer = 0;
+  var bestLeadZ = 0;
 
   var camPos = new THREE.Vector3(0, track.START_Y+16, 22);
   var camLook = new THREE.Vector3(0, track.START_Y, -20);
@@ -619,6 +631,19 @@
     }
   }
 
+  // Safety net: if nobody has made real forward progress for a few
+  // seconds (any leftover jam we didn't anticipate), scatter everyone
+  // sideways and give a forward kick so the pack breaks apart.
+  function unstickBalls(){
+    for(var i=0;i<ORDER.length;i++){
+      var b = balls[ORDER[i]];
+      if(b.finished) continue;
+      b.vx += (Math.random()*2-1)*6;
+      b.vz -= 5;
+      b.x += (Math.random()*2-1)*0.8;
+    }
+  }
+
   function resolveBallCollisions(){
     for(var i=0;i<ORDER.length;i++){
       for(var j=i+1;j<ORDER.length;j++){
@@ -627,11 +652,28 @@
         var dx = bi.x-bj.x, dz = bi.z-bj.z;
         var d = Math.sqrt(dx*dx+dz*dz);
         var minD = bi.radius+bj.radius;
-        if(d < minD && d > 0.0001){
+        if(d < minD){
+          // Balls exactly on top of each other: nudge apart on a random
+          // axis so the collision has something to push against.
+          if(d < 0.0001){
+            var randAng = Math.random()*Math.PI*2;
+            dx = Math.cos(randAng)*0.01; dz = Math.sin(randAng)*0.01;
+            d = 0.01;
+          }
           var nx = dx/d, nz = dz/d;
           var overlap = (minD-d)/2;
+          var biZBefore = bi.z, bjZBefore = bj.z;
+
           bi.x += nx*overlap; bi.z += nz*overlap;
           bj.x -= nx*overlap; bj.z -= nz*overlap;
+
+          // Never let a ball-ball correction push either ball backward
+          // along the track — this is what caused packs of balls to
+          // permanently wedge against each other near the centerline.
+          // Lateral (x) separation is still fully applied.
+          if(bi.z > biZBefore) bi.z = biZBefore;
+          if(bj.z > bjZBefore) bj.z = bjZBefore;
+
           var vni = bi.vx*nx+bi.vz*nz, vnj = bj.vx*nx+bj.vz*nz;
           var diff = (vnj-vni)*0.55;
           bi.vx += diff*nx; bi.vz += diff*nz;
@@ -692,6 +734,17 @@
   var youSwatch = document.getElementById('youSwatch');
   var progressPanel = document.getElementById('progressPanel');
   var progressFills = {};
+  var panHint = document.getElementById('panHint');
+  var panHintTimer = null;
+  function hidePanHint(){
+    panHint.classList.add('faded');
+    if(panHintTimer){ clearTimeout(panHintTimer); panHintTimer = null; }
+  }
+  function showPanHint(){
+    panHint.classList.remove('faded');
+    if(panHintTimer) clearTimeout(panHintTimer);
+    panHintTimer = setTimeout(hidePanHint, 4500);
+  }
 
   function buildProgressPanel(){
     progressPanel.innerHTML = '';
@@ -745,6 +798,17 @@
   }
 
   /* ===================== CAMERA ===================== */
+  // Auto-follow computes camPos/camLook as before; the player can drag to
+  // orbit around that follow point on top of the automatic motion.
+  var orbitYaw = 0;
+  var orbitPitch = 0;
+  var ORBIT_MIN_PITCH = -0.68;
+  var ORBIT_MAX_PITCH = 1.15;
+  var dragging = false;
+  var lastPX = 0, lastPY = 0;
+  var dragVelYaw = 0, dragVelPitch = 0;
+  var userHasPanned = false;
+
   function updateCameraRacing(dt){
     var minZ = 0, sumX = 0;
     for(var i=0;i<ORDER.length;i++){
@@ -760,8 +824,6 @@
     var damp = 1 - Math.exp(-dt*3.2);
     camPos.lerp(targetPos, damp);
     camLook.lerp(targetLook, damp);
-    camera.position.copy(camPos);
-    camera.lookAt(camLook);
   }
 
   function updateCameraIdle(dt){
@@ -772,8 +834,77 @@
     var damp = 1 - Math.exp(-dt*1.5);
     camPos.lerp(targetPos, damp);
     camLook.lerp(targetLook, damp);
-    camera.position.copy(camPos);
+  }
+
+  function updateOrbitInertia(){
+    if(!dragging){
+      if(Math.abs(dragVelYaw) > 0.00005 || Math.abs(dragVelPitch) > 0.00005){
+        orbitYaw += dragVelYaw;
+        orbitPitch = clamp(orbitPitch + dragVelPitch, ORBIT_MIN_PITCH, ORBIT_MAX_PITCH);
+        dragVelYaw *= 0.92;
+        dragVelPitch *= 0.92;
+      }
+    }
+  }
+
+  // Applies the manual orbit offset on top of the auto-follow camPos/camLook
+  // and pushes the final transform to the real camera. Call once per frame.
+  function applyCameraTransform(){
+    var offset = camPos.clone().sub(camLook);
+    var radius = Math.max(offset.length(), 0.5);
+    var baseYaw = Math.atan2(offset.x, offset.z);
+    var basePitch = clamp(Math.asin(clamp(offset.y/radius, -1, 1)), ORBIT_MIN_PITCH, ORBIT_MAX_PITCH);
+
+    var finalYaw = baseYaw + orbitYaw;
+    var finalPitch = clamp(basePitch + orbitPitch, ORBIT_MIN_PITCH, ORBIT_MAX_PITCH);
+
+    var horizR = radius*Math.cos(finalPitch);
+    var fx = camLook.x + horizR*Math.sin(finalYaw);
+    var fy = camLook.y + radius*Math.sin(finalPitch);
+    var fz = camLook.z + horizR*Math.cos(finalYaw);
+
+    camera.position.set(fx, fy, fz);
     camera.lookAt(camLook);
+  }
+
+  /* ---- drag-to-pan input (mouse + touch via Pointer Events) ---- */
+  var domEl = renderer.domElement;
+  domEl.style.touchAction = 'none';
+  var ORBIT_SENS = 0.0055;
+
+  function onPointerDown(e){
+    dragging = true;
+    lastPX = e.clientX; lastPY = e.clientY;
+    dragVelYaw = 0; dragVelPitch = 0;
+    if(domEl.setPointerCapture){ try{ domEl.setPointerCapture(e.pointerId); }catch(err){} }
+  }
+  function onPointerMove(e){
+    if(!dragging) return;
+    var dx = e.clientX - lastPX;
+    var dy = e.clientY - lastPY;
+    lastPX = e.clientX; lastPY = e.clientY;
+    var dYaw = -dx*ORBIT_SENS;
+    var dPitch = dy*ORBIT_SENS;
+    orbitYaw += dYaw;
+    orbitPitch = clamp(orbitPitch + dPitch, ORBIT_MIN_PITCH, ORBIT_MAX_PITCH);
+    dragVelYaw = dYaw;
+    dragVelPitch = dPitch;
+    if(Math.abs(dx) > 2 || Math.abs(dy) > 2){
+      userHasPanned = true;
+      hidePanHint();
+    }
+  }
+  function onPointerUp(){ dragging = false; }
+
+  domEl.addEventListener('pointerdown', onPointerDown);
+  domEl.addEventListener('pointermove', onPointerMove);
+  domEl.addEventListener('pointerup', onPointerUp);
+  domEl.addEventListener('pointercancel', onPointerUp);
+  domEl.addEventListener('pointerleave', onPointerUp);
+
+  function resetOrbit(){
+    orbitYaw = 0; orbitPitch = 0;
+    dragVelYaw = 0; dragVelPitch = 0;
   }
 
   /* ===================== UI WIRING ===================== */
@@ -815,6 +946,7 @@
     scene.add(finishMesh);
 
     resetBalls(balls, track);
+    resetOrbit();
   }
 
   function disposeGroup(group){
@@ -834,6 +966,11 @@
     raceEnded = false;
     elapsed = 0;
     finishOrder = [];
+    stallTimer = 0;
+    bestLeadZ = 0;
+    resetOrbit();
+    userHasPanned = false;
+    showPanHint();
   }
 
   function endRace(){
@@ -936,6 +1073,22 @@
       updateHud(dt);
       updateCameraRacing(dt);
 
+      var leadZ = 0;
+      for(var kk=0;kk<ORDER.length;kk++){
+        var bl = balls[ORDER[kk]];
+        if(bl.z < leadZ) leadZ = bl.z;
+      }
+      if(leadZ < bestLeadZ - 0.4){
+        bestLeadZ = leadZ;
+        stallTimer = 0;
+      } else {
+        stallTimer += dt;
+        if(stallTimer > STALL_TIMEOUT){
+          unstickBalls();
+          stallTimer = 0;
+        }
+      }
+
       if(allDone || elapsed >= MAX_RACE_TIME){
         endRace();
       }
@@ -946,6 +1099,8 @@
       }
     }
 
+    updateOrbitInertia();
+    applyCameraTransform();
     updateConfetti(dt);
     renderer.render(scene, camera);
   }

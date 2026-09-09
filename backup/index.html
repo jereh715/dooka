@@ -2,419 +2,256 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>6 DOF Flight Simulator - Immersive Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>6 DOF Mobile Flight Simulator - Airport Navigation</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body {
-            width: 100%; height: 100%; overflow: hidden; background-color: #09090b;
-            touch-action: none; overscroll-behavior: none; font-family: 'Segoe UI', system-ui, sans-serif;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        html, body { width: 100vw; height: 100vh; overflow: hidden; background-color: #000; font-family: monospace; }
+        
         #canvas-container { width: 100%; height: 100%; position: absolute; inset: 0; z-index: 1; }
-        .no-select { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 
-        :root {
-            --panel-bg: linear-gradient(160deg, #1b1f24, #0d1013);
-            --bezel: #3a4048;
-            --lcd-green: #6cff8a;
-            --lcd-amber: #ffb648;
-            --lcd-cyan: #5ad1ff;
-            --lcd-text: #e8edf2;
-            --lcd-font: 'Consolas', 'Menlo', 'Courier New', monospace;
-        }
-
-        /* ---------- HUD / INSTRUMENT PANEL ---------- */
-        #hud {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 6;
-            display: flex; justify-content: space-between; align-items: flex-start;
-            padding: env(safe-area-inset-top, 10px) 10px 0 10px;
+        /* Minimalist Unobstructed HUD Overlay */
+        .hud-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
             pointer-events: none;
-        }
-        .gauge-panel {
-            background: var(--panel-bg);
-            border: 1px solid var(--bezel);
-            border-radius: 10px;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.5), inset 0 0 12px rgba(0,0,0,0.6);
-            padding: 8px 10px;
-            color: var(--lcd-text);
-        }
-        .gauge-label {
-            font-size: 9px; letter-spacing: 1px; color: #8b95a1; margin-bottom: 2px;
-        }
-        .gauge {
-            position: relative; width: 74px; height: 74px; border-radius: 50%;
-            background: radial-gradient(circle at 35% 30%, #24292e, #0c0f12 75%);
-            border: 2px solid var(--bezel);
-            margin: 0 auto;
-        }
-        .pointer {
-            position: absolute; top: 0; left: 50%; width: 0; height: 100%;
-            transform-origin: 50% 50%; transform: translateX(-50%) rotate(0deg);
-        }
-        .pointer::before {
-            content: ''; position: absolute; top: 8%; left: -5px; width: 0; height: 0;
-            border-left: 5px solid transparent; border-right: 5px solid transparent;
-        }
-        .asi-pointer::before { border-bottom: 26px solid var(--lcd-green); }
-        .heading-pointer::before { border-bottom: 22px solid var(--lcd-text); }
-        .nav-pointer::before { border-bottom: 22px solid var(--lcd-cyan); }
-        .gauge-center-cap {
-            position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
-            background: #555; border-radius: 50%; transform: translate(-50%,-50%);
-        }
-        .compass-labels span {
-            position: absolute; font-size: 9px; color: #8b95a1; font-weight: 600;
-        }
-        .cl-n { top: 3px; left: 50%; transform: translateX(-50%); }
-        .cl-s { bottom: 3px; left: 50%; transform: translateX(-50%); }
-        .cl-e { right: 4px; top: 50%; transform: translateY(-50%); }
-        .cl-w { left: 4px; top: 50%; transform: translateY(-50%); }
-        .digital-row {
-            text-align: center; margin-top: 4px; font-family: var(--lcd-font);
-            font-size: 14px; color: var(--lcd-green); text-shadow: 0 0 6px rgba(108,255,138,0.6);
-        }
-        .digital-row.small { font-size: 10px; color: #9fb0bd; text-shadow: none; margin-top: 1px; }
-
-        #mission-panel { min-width: 130px; text-align: right; }
-        #mission-panel .dest-name { font-size: 13px; color: var(--lcd-cyan); font-weight: 700; }
-        #mission-panel .mp-row { font-family: var(--lcd-font); font-size: 12px; margin-top: 3px; color: var(--lcd-text); }
-        #mission-panel .mp-row span.k { color: #8b95a1; font-family: 'Segoe UI', sans-serif; margin-right: 4px; }
-
-        #hint-bar {
-            position: fixed; top: 90px; left: 50%; transform: translateX(-50%); z-index: 6;
-            background: rgba(10,14,18,0.7); color: var(--lcd-text); font-size: 11px;
-            padding: 6px 12px; border-radius: 20px; border: 1px solid var(--bezel);
-            pointer-events: none; text-align: center;
-            animation: hintFade 1s ease 7s forwards;
-        }
-        @keyframes hintFade { to { opacity: 0; visibility: hidden; } }
-
-        /* ---------- RUDDER PEDALS (bottom-left) ---------- */
-        #rudder-zone {
-            position: fixed; left: 0; bottom: 0; width: 42%; height: 22%;
-            z-index: 5; touch-action: none;
-        }
-        #pedal-track {
-            position: absolute; bottom: 14px; left: 10px; right: 10px; height: 46px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .pedal {
-            width: 42%; height: 40px; border-radius: 8px;
-            background: linear-gradient(180deg, #2b3036, #17191c);
-            border: 1px solid var(--bezel);
-            transition: transform 0.08s ease-out;
-            box-shadow: inset 0 2px 4px rgba(255,255,255,0.05);
-        }
-        #rudder-indicator {
-            position: absolute; bottom: 62px; left: 50%; width: 4px; height: 14px;
-            background: var(--lcd-amber); border-radius: 2px;
-            transform: translateX(-50%); box-shadow: 0 0 6px rgba(255,182,72,0.7);
-        }
-        #rudder-track-line {
-            position: absolute; bottom: 66px; left: 10px; right: 10px; height: 2px; background: #33383e;
-        }
-        .zone-caption {
-            position: absolute; bottom: -2px; left: 0; right: 0; text-align: center;
-            font-size: 9px; letter-spacing: 2px; color: #55606b;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 12px 20px;
+            color: #00ffcc;
+            text-shadow: 0 0 4px rgba(0,255,204,0.6);
         }
 
-        /* ---------- THROTTLE (left edge) ---------- */
-        #throttle-track {
-            position: fixed; left: 10px; top: 24%; width: 46px; height: 46%;
-            z-index: 5; touch-action: none;
-            background: linear-gradient(180deg, #17191c, #0c0e10);
-            border: 1px solid var(--bezel); border-radius: 10px;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.6);
-        }
-        #throttle-fill {
-            position: absolute; bottom: 0; left: 0; right: 0; height: 55%;
-            background: linear-gradient(180deg, rgba(255,182,72,0.15), rgba(255,182,72,0.5));
-            border-radius: 0 0 9px 9px; pointer-events: none;
-        }
-        #throttle-handle {
-            position: absolute; left: 4px; right: 4px; bottom: 55%; height: 22px;
-            background: linear-gradient(180deg, #4a5157, #23272b);
-            border: 1px solid var(--bezel); border-radius: 5px;
-            transform: translateY(50%); pointer-events: none;
-        }
-        #throttle-handle::after {
-            content: ''; position: absolute; left: 6px; right: 6px; top: 50%; height: 2px;
-            background: #6a747d; transform: translateY(-50%);
-        }
-        .throttle-label {
-            position: absolute; top: -18px; left: 0; right: 0; text-align: center;
-            font-size: 9px; letter-spacing: 2px; color: #55606b;
+        /* Top Instrumentation Strip */
+        .top-strip {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
         }
 
-        /* ---------- JOYSTICK (bottom-right) ---------- */
-        #joystick-zone {
-            position: fixed; right: 0; bottom: 0; width: 55%; height: 50%;
-            z-index: 5; touch-action: none;
-        }
-        #joystick-base {
-            position: absolute; width: 140px; height: 140px; margin: -70px 0 0 -70px;
-            border-radius: 50%; background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.15); opacity: 0; transition: opacity 0.1s;
-        }
-        #joystick-nub {
-            position: absolute; top: 50%; left: 50%; width: 56px; height: 56px;
-            margin: -28px 0 0 -28px; border-radius: 50%;
-            background: radial-gradient(circle at 35% 30%, #4a5157, #1b1e21);
-            border: 1px solid var(--bezel); box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+        .instrument-panel {
+            background: rgba(10, 15, 20, 0.55);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0, 255, 204, 0.25);
+            border-radius: 8px;
+            padding: 8px 14px;
+            display: flex;
+            gap: 16px;
+            font-size: 13px;
         }
 
-        /* ---------- YOKE (decorative) ---------- */
-        #yoke {
-            position: fixed; left: 50%; bottom: 10%; z-index: 4; pointer-events: none;
-            width: 90px; height: 90px; transform: translate(-50%, -50%);
-        }
-        #yoke svg { width: 100%; height: 100%; opacity: 0.55; }
+        .inst-item { display: flex; flex-direction: column; align-items: center; }
+        .inst-label { font-size: 9px; opacity: 0.75; letter-spacing: 1px; }
+        .inst-value { font-size: 16px; font-weight: bold; }
 
-        /* ---------- MISSION OVERLAY ---------- */
-        #mission-overlay {
-            position: fixed; inset: 0; z-index: 50; display: none;
-            align-items: center; justify-content: center;
-            background: rgba(6,8,10,0.82); backdrop-filter: blur(2px);
+        .nav-panel {
+            background: rgba(10, 15, 20, 0.55);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0, 255, 204, 0.25);
+            border-radius: 8px;
+            padding: 8px 14px;
+            text-align: right;
+            font-size: 12px;
         }
-        .mission-panel {
-            background: var(--panel-bg); border: 1px solid var(--bezel); border-radius: 14px;
-            padding: 22px 24px; width: min(86%, 380px); text-align: center; color: var(--lcd-text);
+
+        /* Side Controls (Interactive Touch Targets) */
+        .bottom-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+            pointer-events: auto;
         }
-        .mission-panel h2 { font-size: 18px; color: var(--lcd-green); margin-bottom: 6px; }
-        .mission-panel p { font-size: 12px; color: #9fb0bd; margin-bottom: 14px; line-height: 1.5; }
-        #mission-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-        .mission-card {
-            display: flex; justify-content: space-between; align-items: center;
-            background: #14171a; border: 1px solid var(--bezel); border-radius: 8px;
-            padding: 12px 14px; cursor: pointer;
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
-        .mission-card:active { background: #1e2226; }
-        .mc-label { font-size: 13px; }
-        .mc-dist { font-family: var(--lcd-font); color: var(--lcd-cyan); font-size: 13px; }
-        #start-btn {
-            width: 100%; padding: 12px; border-radius: 8px; border: none;
-            background: var(--lcd-green); color: #0c0f12; font-weight: 700; font-size: 14px;
+
+        .hud-btn {
+            background: rgba(10, 15, 20, 0.65);
+            border: 1px solid rgba(0, 255, 204, 0.4);
+            color: #00ffcc;
+            border-radius: 6px;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            font-weight: bold;
+            touch-action: manipulation;
         }
+
+        .hud-btn:active {
+            background: rgba(0, 255, 204, 0.3);
+            border-color: #00ffcc;
+        }
+
+        .trim-box {
+            background: rgba(10, 15, 20, 0.55);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0, 255, 204, 0.25);
+            border-radius: 8px;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .trim-label { font-size: 9px; opacity: 0.8; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-<body class="no-select">
+<body>
 
   <div id="canvas-container"></div>
 
-  <!-- INSTRUMENT PANEL -->
-  <div id="hud">
-    <div style="display:flex; gap:8px;">
-      <div class="gauge-panel">
-        <div class="gauge-label">AIRSPEED</div>
-        <div class="gauge">
-          <div id="asi-needle" class="pointer asi-pointer"></div>
-          <div class="gauge-center-cap"></div>
-        </div>
-        <div class="digital-row"><span id="asi-digital">0</span> <span style="font-size:10px;color:#8b95a1;">kt</span></div>
-        <div class="digital-row small">ALT <span id="alt-digital">0</span> ft</div>
-      </div>
-      <div class="gauge-panel">
-        <div class="gauge-label">HEADING / NAV</div>
-        <div class="gauge">
-          <div class="compass-labels">
-            <span class="cl cl-n">N</span><span class="cl cl-e">E</span><span class="cl cl-s">S</span><span class="cl cl-w">W</span>
+  <!-- HUD INTERFACE -->
+  <div class="hud-overlay">
+      <div class="top-strip">
+          <div class="instrument-panel">
+              <div class="inst-item">
+                  <span class="inst-label">AIRSPEED</span>
+                  <span class="inst-value" id="val-spd">0 kts</span>
+              </div>
+              <div class="inst-item">
+                  <span class="inst-label">ALTITUDE</span>
+                  <span class="inst-value" id="val-alt">0 ft</span>
+              </div>
+              <div class="inst-item">
+                  <span class="inst-label">THROTTLE</span>
+                  <span class="inst-value" id="val-thr">50%</span>
+              </div>
           </div>
-          <div id="hdg-pointer" class="pointer heading-pointer"></div>
-          <div id="nav-needle" class="pointer nav-pointer"></div>
-          <div class="gauge-center-cap"></div>
-        </div>
-        <div class="digital-row"><span id="hdg-digital">000&deg;</span></div>
+
+          <div class="nav-panel">
+              <div>NAV: <span id="nav-target" style="color:#FFF;">DEST AIRPORT</span></div>
+              <div>DIST: <span id="nav-dist">0 nm</span> | HDG: <span id="nav-hdg">0°</span></div>
+          </div>
       </div>
-    </div>
 
-    <div class="gauge-panel" id="mission-panel">
-      <div class="gauge-label" style="text-align:right;">DESTINATION</div>
-      <div class="dest-name" id="dest-name">--</div>
-      <div class="mp-row"><span class="k">DIST</span><span id="dist-digital">-- km</span></div>
-      <div class="mp-row"><span class="k">ETA</span><span id="eta-digital">--:--</span></div>
-    </div>
-  </div>
+      <div class="bottom-controls">
+          <!-- Throttle Controls (Left Side) -->
+          <div class="control-group">
+              <div class="trim-box">
+                  <span class="trim-label">THROTTLE</span>
+                  <div style="display:flex; gap:4px;">
+                      <button class="hud-btn" id="btn-thr-dn">-</button>
+                      <button class="hud-btn" id="btn-thr-up">+</button>
+                  </div>
+              </div>
+          </div>
 
-  <div id="hint-bar">Left pedals = rudder &nbsp;&middot;&nbsp; right stick = pitch/roll &nbsp;&middot;&nbsp; left slider = throttle &nbsp;&middot;&nbsp; follow the cyan needle to your airport</div>
-
-  <!-- RUDDER PEDALS -->
-  <div id="rudder-zone">
-    <div id="rudder-track-line"></div>
-    <div id="rudder-indicator"></div>
-    <div id="pedal-track">
-      <div class="pedal" id="pedal-left"></div>
-      <div class="pedal" id="pedal-right"></div>
-    </div>
-    <div class="zone-caption">RUDDER</div>
-  </div>
-
-  <!-- THROTTLE -->
-  <div id="throttle-track">
-    <div class="throttle-label">THR</div>
-    <div id="throttle-fill"></div>
-    <div id="throttle-handle"></div>
-  </div>
-
-  <!-- JOYSTICK -->
-  <div id="joystick-zone">
-    <div id="joystick-base"><div id="joystick-nub"></div></div>
-  </div>
-
-  <!-- YOKE (decorative) -->
-  <div id="yoke">
-    <svg viewBox="0 0 100 100">
-      <circle cx="50" cy="50" r="8" fill="none" stroke="#c7cdd3" stroke-width="4"/>
-      <path d="M 50 50 L 20 30 M 50 50 L 80 30 M 50 50 L 50 85" stroke="#c7cdd3" stroke-width="6" stroke-linecap="round" fill="none"/>
-      <circle cx="20" cy="30" r="9" fill="none" stroke="#c7cdd3" stroke-width="5"/>
-      <circle cx="80" cy="30" r="9" fill="none" stroke="#c7cdd3" stroke-width="5"/>
-    </svg>
-  </div>
-
-  <!-- MISSION OVERLAY -->
-  <div id="mission-overlay">
-    <div class="mission-panel">
-      <h2 id="overlay-title">Mission 1</h2>
-      <p id="overlay-sub"></p>
-      <div id="mission-cards"></div>
-      <button id="start-btn">Start Flight</button>
-    </div>
+          <!-- Pitch & Yaw Trim Controls (Right Side) -->
+          <div class="control-group">
+              <div class="trim-box">
+                  <span class="trim-label">PITCH TRIM</span>
+                  <div style="display:flex; gap:4px;">
+                      <button class="hud-btn" id="btn-ptrim-dn">▼</button>
+                      <button class="hud-btn" id="btn-ptrim-up">▲</button>
+                  </div>
+              </div>
+              <div class="trim-box">
+                  <span class="trim-label">RUDDER TRIM</span>
+                  <div style="display:flex; gap:4px;">
+                      <button class="hud-btn" id="btn-ytrim-l">◄</button>
+                      <button class="hud-btn" id="btn-ytrim-r">►</button>
+                  </div>
+              </div>
+          </div>
+      </div>
   </div>
 
   <script>
         var container = document.getElementById('canvas-container');
         var scene, camera, renderer, ambientLight, sunLight;
         
-        // Mobile optimized terrain rendering limits
-        var CHUNK_SIZE = 1600;
-        var CHUNK_SEGMENTS = 20; 
+        var CHUNK_SIZE = 1800;
+        var CHUNK_SEGMENTS = 16; 
         var RENDER_RADIUS = 1; 
         var activeChunks = new Map();
         
-        var airplane, fuselage, wingCenter, aileronL, aileronR, flapL, flapR;
-        var tailV, tailH, elevator, rudderSurface, nose, propellerGroup, propHub, blade1, blade2;
-        var landingGearGroup, noseStrut, noseWheel, mainStrutL, mainWheelL, mainStrutR, mainWheelR;
+        var airplane, propellerGroup;
+        var airports = [];
+        var activeAirportIdx = 1;
 
-        // Simulator Physics State
+        // Flight Physics & Dynamics
         var physics = { 
-            speed: 60, pitchSpeed: 0, rollSpeed: 0, yawSpeed: 0, 
-            maxSpeed: 130, minSpeed: 0, trim: 0.0, flaps: 0.0,
-            isGrounded: false, throttle: 0.55
+            speed: 65,
+            throttle: 0.5,
+            pitchSpeed: 0,
+            rollSpeed: 0,
+            yawSpeed: 0,
+            pitchTrim: 0.0,  // Dynamic pitch trim offset
+            yawTrim: 0.0,    // Dynamic rudder trim offset
+            maxSpeed: 140,
+            minSpeed: 0,
+            isGrounded: false
         };
         
         var clock = new THREE.Clock();
-        var delta;
+        var gestureInput = { x: 0, y: 0 };
+        var isDragging = false, touchStartX = 0, touchStartY = 0;
 
-        // Virtual input state
-        var gestureInput = { x: 0, y: 0 }; // from joystick zone: roll / pitch
-        var rudderInput = 0; // from rudder pedal zone
-
-        // --- WEBGL SIMULATOR INITIALIZATION ---
+        // Initial setup
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.FogExp2(0x87CEEB, 0.001);
+        scene.background = new THREE.Color(0x71b4e6);
+        scene.fog = new THREE.FogExp2(0x71b4e6, 0.0006);
 
-        camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 4000);
+        camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 5000);
         renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         container.appendChild(renderer.domElement);
 
-        ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene.add(ambientLight);
         sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
         sunLight.position.set(1000, 2000, 1000);
         scene.add(sunLight);
 
-        // --- MISSION / AIRPORT SYSTEM ---
-        var AIRPORT_NAMES = ["Meadowfield","Pinecrest","Rocky Bluff","Sable Point","Cedar Ridge","Harborview","Stonebridge","Windermere","Amber Flats","Silver Creek","Falcon Mesa","Driftwood Bay"];
-        var nameIndex = 0;
-        function nextAirportName(){ return AIRPORT_NAMES[nameIndex++ % AIRPORT_NAMES.length] + " Field"; }
-        function randRange(a, b){ return a + Math.random() * (b - a); }
-
-        var airports = [];
-        var targetAirport = null;
-        var missionState = 'briefing'; // 'briefing' | 'enroute' | 'complete'
-        var missionCount = 1;
-
-        function baseNoiseHeight(x, z) {
-            return Math.sin(x * 0.003) * Math.cos(z * 0.003) * 70 + Math.sin(x * 0.01) * 12;
-        }
-
-        // --- PROCEDURAL REPETITIVE WORLD TERRAIN ENGINE ---
+        // Procedural Height Formula
         function getGroundHeight(x, z) {
-            var h = baseNoiseHeight(x, z);
-            for (var i = 0; i < airports.length; i++) {
-                var ap = airports[i];
-                var dx = x - ap.x, dz = z - ap.z;
-                var d = Math.sqrt(dx * dx + dz * dz);
-                if (d < ap.radius) {
-                    h = ap.elevation;
-                } else if (d < ap.radius + 220) {
-                    var t = (d - ap.radius) / 220;
-                    h = THREE.MathUtils.lerp(ap.elevation, h, t);
-                }
-            }
-            return h;
+            return Math.sin(x * 0.002) * Math.cos(z * 0.002) * 60 + Math.sin(x * 0.008) * 10;
         }
 
-        function buildAirportVisual(ap) {
+        // Airport Runway Generator
+        function createAirport(x, z, name) {
             var group = new THREE.Group();
-            var padGeo = new THREE.CircleGeometry(ap.radius, 24);
-            padGeo.rotateX(-Math.PI / 2);
-            var padMat = new THREE.MeshLambertMaterial({ color: 0x4a7a4f });
-            group.add(new THREE.Mesh(padGeo, padMat));
-
-            var rwGeo = new THREE.BoxGeometry(36, 0.4, 480);
-            var rwMat = new THREE.MeshLambertMaterial({ color: 0x2b2d31 });
+            
+            // Runway strip
+            var rwGeo = new THREE.PlaneGeometry(120, 1600);
+            var rwMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
             var runway = new THREE.Mesh(rwGeo, rwMat);
-            runway.position.y = 0.25; runway.rotation.y = ap.heading;
+            runway.rotateX(-Math.PI / 2);
+            runway.position.y = getGroundHeight(x, z) + 0.5;
             group.add(runway);
 
-            var lineGeo = new THREE.BoxGeometry(2, 0.42, 460);
-            var lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            var line = new THREE.Mesh(lineGeo, lineMat);
-            line.position.y = 0.26; line.rotation.y = ap.heading;
-            group.add(line);
+            // Runway Beacon
+            var beaconGeo = new THREE.CylinderGeometry(4, 4, 100, 8);
+            var beaconMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+            var beacon = new THREE.Mesh(beaconGeo, beaconMat);
+            beacon.position.set(0, 50, 0);
+            group.add(beacon);
 
-            var poleGeo = new THREE.CylinderGeometry(0.4, 0.4, 10, 6);
-            var pole = new THREE.Mesh(poleGeo, new THREE.MeshLambertMaterial({ color: 0xaaaaaa }));
-            pole.position.set(40, 5, 25); group.add(pole);
-            var sockGeo = new THREE.ConeGeometry(2, 8, 8);
-            var sock = new THREE.Mesh(sockGeo, new THREE.MeshLambertMaterial({ color: 0xff7f27 }));
-            sock.rotation.z = Math.PI / 2; sock.position.set(45, 9, 25); group.add(sock);
-
-            var canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 64;
-            var ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'rgba(10,14,18,0.75)'; ctx.fillRect(0, 0, 256, 64);
-            ctx.font = 'bold 30px sans-serif'; ctx.fillStyle = '#6cff8a';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(ap.name, 128, 32);
-            var tex = new THREE.CanvasTexture(canvas);
-            var sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-            sprite.scale.set(120, 30, 1); sprite.position.set(0, 60, 0);
-            group.add(sprite);
-
-            group.position.set(ap.x, ap.elevation, ap.z);
+            group.position.set(x, 0, z);
             scene.add(group);
-            ap.visual = group;
+
+            return { x: x, z: z, name: name };
         }
 
-        function createAirport(x, z, heading, name) {
-            var ap = { x: x, z: z, heading: heading, name: name, radius: 260, elevation: baseNoiseHeight(x, z) };
-            airports.push(ap);
-            buildAirportVisual(ap);
-            return ap;
-        }
+        // Generate Origin and Destination Airports
+        airports.push(createAirport(0, 0, "Origin Airfield"));
+        airports.push(createAirport(0, 8000, "Regional Hub (K8)"));
+        airports.push(createAirport(-7000, -4000, "Mountain Airstrip"));
 
-        function generateDestination(fromAirport, minDist, maxDist, biasForward) {
-            var angle = biasForward ? randRange(-Math.PI / 3, Math.PI / 3) : randRange(0, Math.PI * 2);
-            var dist = randRange(minDist, maxDist);
-            var x = fromAirport.x + Math.sin(angle) * dist;
-            var z = fromAirport.z + Math.cos(angle) * dist;
-            return createAirport(x, z, randRange(0, Math.PI * 2), nextAirportName());
-        }
-
+        // Terrain Chunking
         function createChunk(cx, cz) {
             var chunkKey = cx + "," + cz;
             if (activeChunks.has(chunkKey)) return;
@@ -434,415 +271,180 @@
             }
             terrainGeo.computeVertexNormals();
 
-            var terrainMat = new THREE.MeshLambertMaterial({ color: 0x3c824e, flatShading: true });
+            var terrainMat = new THREE.MeshLambertMaterial({ color: 0x3d7e48, flatShading: true });
             var terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
             chunkGroup.add(terrainMesh);
-
-            var trunkGeo = new THREE.CylinderGeometry(1, 1.8, 8, 4);
-            var trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
-            var leavesGeo = new THREE.ConeGeometry(5, 14, 4);
-            var leavesMat = new THREE.MeshLambertMaterial({ color: 0x1e5622, flatShading: true });
-
-            for (var t = 0; t < 40; t++) {
-                var rx = (Math.random() - 0.5) * CHUNK_SIZE;
-                var rz = (Math.random() - 0.5) * CHUNK_SIZE;
-                var worldRX = rx + worldXOffset, worldRZ = rz + worldZOffset;
-                var nearAirport = false;
-                for (var a = 0; a < airports.length; a++) {
-                    var ap = airports[a];
-                    if (Math.hypot(worldRX - ap.x, worldRZ - ap.z) < ap.radius + 100) { nearAirport = true; break; }
-                }
-                if (nearAirport) continue;
-                var tree = new THREE.Group();
-                var trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 4;
-                var leaves = new THREE.Mesh(leavesGeo, leavesMat); leaves.position.y = 13;
-                tree.add(trunk, leaves);
-                tree.position.set(rx, getGroundHeight(worldRX, worldRZ), rz);
-                chunkGroup.add(tree);
-            }
 
             chunkGroup.position.set(worldXOffset, 0, worldZOffset);
             scene.add(chunkGroup);
             activeChunks.set(chunkKey, chunkGroup);
         }
 
-        function updateTerrainChunks(playerPosition) {
-            var currentChunkX = Math.floor((playerPosition.x + CHUNK_SIZE/2) / CHUNK_SIZE);
-            var currentChunkZ = Math.floor((playerPosition.z + CHUNK_SIZE/2) / CHUNK_SIZE);
+        function updateTerrain(pos) {
+            var cx = Math.floor((pos.x + CHUNK_SIZE/2) / CHUNK_SIZE);
+            var cz = Math.floor((pos.z + CHUNK_SIZE/2) / CHUNK_SIZE);
 
             for (var x = -RENDER_RADIUS; x <= RENDER_RADIUS; x++) {
                 for (var z = -RENDER_RADIUS; z <= RENDER_RADIUS; z++) {
-                    createChunk(currentChunkX + x, currentChunkZ + z);
+                    createChunk(cx + x, cz + z);
                 }
             }
             for (const [key, value] of activeChunks.entries()) {
                 var parts = key.split(',');
-                var cx = Number(parts[0]);
-                var cz = Number(parts[1]);
-                if (Math.abs(cx - currentChunkX) > RENDER_RADIUS + 1 || Math.abs(cz - currentChunkZ) > RENDER_RADIUS + 1) {
+                if (Math.abs(Number(parts[0]) - cx) > RENDER_RADIUS + 1 || Math.abs(Number(parts[1]) - cz) > RENDER_RADIUS + 1) {
                     scene.remove(value);
                     activeChunks.delete(key);
                 }
             }
         }
 
-        // --- AIRFRAME MESH ASSEMBLY ---
+        // Airframe Assembly
         airplane = new THREE.Group();
-        var bodyGeo = new THREE.CylinderGeometry(1.2, 0.6, 12, 8); bodyGeo.rotateX(Math.PI / 2);
-        var bodyMat = new THREE.MeshLambertMaterial({ color: 0xdcdcdc });
-        fuselage = new THREE.Mesh(bodyGeo, bodyMat); airplane.add(fuselage);
+        var bodyMat = new THREE.MeshLambertMaterial({ color: 0xdedede });
+        var wingMat = new THREE.MeshLambertMaterial({ color: 0x1f65d6 });
 
-        var wingCenterGeo = new THREE.BoxGeometry(10, 0.2, 3);
-        var wingMat = new THREE.MeshLambertMaterial({ color: 0xd63031 });
-        wingCenter = new THREE.Mesh(wingCenterGeo, wingMat); wingCenter.position.set(0, 0, 1); airplane.add(wingCenter);
+        var body = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 0.5, 11, 8), bodyMat);
+        body.rotateX(Math.PI / 2);
+        airplane.add(body);
 
-        var aileronLGeo = new THREE.BoxGeometry(3.5, 0.15, 0.8);
-        var aileronLMat = new THREE.MeshLambertMaterial({ color: 0x2d3436 });
-        aileronL = new THREE.Mesh(aileronLGeo, aileronLMat); aileronL.geometry.translate(-1.75, 0, -0.4); aileronL.position.set(-5, 0, -0.1); airplane.add(aileronL);
-        aileronR = new THREE.Mesh(aileronLGeo, aileronLMat); aileronR.geometry.translate(1.75, 0, -0.4); aileronR.position.set(5, 0, -0.1); airplane.add(aileronR);
+        var wings = new THREE.Mesh(new THREE.BoxGeometry(11, 0.15, 2.5), wingMat);
+        wings.position.set(0, 0, 0.5);
+        airplane.add(wings);
 
-        var flapGeo = new THREE.BoxGeometry(3.0, 0.15, 0.8); var flapMat = new THREE.MeshLambertMaterial({ color: 0x0984e3 });
-        flapL = new THREE.Mesh(flapGeo, flapMat); flapL.geometry.translate(-1.5, -0.1, -0.4); flapL.position.set(-1.5, 0, -0.1); airplane.add(flapL);
-        flapR = new THREE.Mesh(flapGeo, flapMat); flapR.geometry.translate(1.5, -0.1, -0.4); flapR.position.set(1.5, 0, -0.1); airplane.add(flapR);
+        var tailH = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.1, 1.2), wingMat);
+        tailH.position.set(0, 0, -4.5);
+        airplane.add(tailH);
 
-        var tailVGeo = new THREE.BoxGeometry(0.1, 3, 1.5); tailV = new THREE.Mesh(tailVGeo, wingMat); tailV.position.set(0, 1.5, -5); airplane.add(tailV);
-        var tailHGeo = new THREE.BoxGeometry(6, 0.1, 1.5); tailH = new THREE.Mesh(tailHGeo, wingMat); tailH.position.set(0, 0, -5); airplane.add(tailH);
-        var elevatorGeo = new THREE.BoxGeometry(5.6, 0.1, 0.6); var elevatorMat = new THREE.MeshLambertMaterial({ color: 0x2d3436 });
-        elevator = new THREE.Mesh(elevatorGeo, elevatorMat); elevator.geometry.translate(0, 0, -0.3); elevator.position.set(0, 0, -5.75); airplane.add(elevator);
-
-        var rudderGeo = new THREE.BoxGeometry(0.1, 2.4, 0.9);
-        rudderSurface = new THREE.Mesh(rudderGeo, elevatorMat);
-        rudderSurface.geometry.translate(0, 0, -0.45); rudderSurface.position.set(0, 1.5, -5.75);
-        airplane.add(rudderSurface);
-
-        var noseGeo = new THREE.ConeGeometry(1.2, 3, 8); noseGeo.rotateX(Math.PI / 2);
-        var noseMat = new THREE.MeshLambertMaterial({ color: 0x2d3436 });
-        nose = new THREE.Mesh(noseGeo, noseMat); nose.position.set(0, 0, 6); airplane.add(nose);
+        var tailV = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.2, 1.2), wingMat);
+        tailV.position.set(0, 1.1, -4.5);
+        airplane.add(tailV);
 
         propellerGroup = new THREE.Group();
-        var propHubGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.5, 8); propHubGeo.rotateX(Math.PI / 2);
-        propHub = new THREE.Mesh(propHubGeo, bodyMat); propellerGroup.add(propHub);
-        var bladeGeo = new THREE.BoxGeometry(5.5, 0.3, 0.08); var bladeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
-        blade1 = new THREE.Mesh(bladeGeo, bladeMat); propellerGroup.add(blade1);
-        blade2 = new THREE.Mesh(bladeGeo, bladeMat); blade2.rotation.z = Math.PI / 2; propellerGroup.add(blade2);
-        propellerGroup.position.set(0, 0, 7.5); airplane.add(propellerGroup);
+        var prop = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.2, 0.05), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+        propellerGroup.add(prop);
+        propellerGroup.position.set(0, 0, 5.6);
+        airplane.add(propellerGroup);
 
-        landingGearGroup = new THREE.Group();
-        var strutMat = new THREE.MeshLambertMaterial({ color: 0xb2bec3 }); var tireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-        var wheelGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.4, 8); wheelGeo.rotateZ(Math.PI/2);
-        noseStrut = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3.5), strutMat); noseStrut.position.set(0, -1.75, 4);
-        noseWheel = new THREE.Mesh(wheelGeo, tireMat); noseWheel.position.set(0, -3.5, 4); landingGearGroup.add(noseStrut, noseWheel);
-        mainStrutL = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3.5), strutMat); mainStrutL.position.set(-2.5, -1.75, -1);
-        mainWheelL = new THREE.Mesh(wheelGeo, tireMat); mainWheelL.position.set(-2.5, -3.5, -1); landingGearGroup.add(mainStrutL, mainWheelL);
-        mainStrutR = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3.5), strutMat); mainStrutR.position.set(2.5, -1.75, -1);
-        mainWheelR = new THREE.Mesh(wheelGeo, tireMat); mainWheelR.position.set(2.5, -3.5, -1); landingGearGroup.add(mainStrutR, mainWheelR);
-        airplane.add(landingGearGroup);
-
-        airplane.position.set(0, 250, 0); 
+        airplane.position.set(0, 120, -200); 
         scene.add(airplane);
 
-        // --- MISSION 1 SETUP ---
-        var homeAirport = createAirport(0, 0, 0, "Meadowfield Field");
-        targetAirport = generateDestination(homeAirport, 9000, 15000, true);
-        missionState = 'enroute';
-
-        // --- TOUCH / POINTER CONTROL RIG ---
-        var joystickZone = document.getElementById('joystick-zone');
-        var joystickBase = document.getElementById('joystick-base');
-        var joystickNub = document.getElementById('joystick-nub');
-        var rudderZone = document.getElementById('rudder-zone');
-        var rudderIndicator = document.getElementById('rudder-indicator');
-        var pedalLeft = document.getElementById('pedal-left');
-        var pedalRight = document.getElementById('pedal-right');
-        var throttleTrack = document.getElementById('throttle-track');
-        var throttleFill = document.getElementById('throttle-fill');
-        var throttleHandle = document.getElementById('throttle-handle');
-        var yokeEl = document.getElementById('yoke');
-
-        var JOY_RADIUS = 70;
-        var joystickPointerId = null, rudderPointerId = null, throttlePointerId = null;
-        var joystickCenter = { x: 0, y: 0 };
-
-        function pointInRect(px, py, r) { return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom; }
-
-        function updateRudderFromPoint(clientX, rect) {
-            var center = rect.left + rect.width / 2;
-            rudderInput = Math.max(-1, Math.min(1, (clientX - center) / (rect.width / 2)));
-        }
-        function updateThrottleFromPoint(clientY, rect) {
-            var rel = 1 - (clientY - rect.top) / rect.height;
-            physics.throttle = Math.max(0, Math.min(1, rel));
-        }
-
-        document.addEventListener('pointerdown', function(e) {
-            var jRect = joystickZone.getBoundingClientRect();
-            var rRect = rudderZone.getBoundingClientRect();
-            var tRect = throttleTrack.getBoundingClientRect();
-            if (joystickPointerId === null && pointInRect(e.clientX, e.clientY, jRect)) {
-                joystickPointerId = e.pointerId;
-                joystickCenter.x = Math.min(Math.max(e.clientX, jRect.left + JOY_RADIUS), jRect.right - JOY_RADIUS);
-                joystickCenter.y = Math.min(Math.max(e.clientY, jRect.top + JOY_RADIUS), jRect.bottom - JOY_RADIUS);
-                joystickBase.style.left = (joystickCenter.x - jRect.left) + 'px';
-                joystickBase.style.top = (joystickCenter.y - jRect.top) + 'px';
-                joystickBase.style.opacity = 1;
-            } else if (rudderPointerId === null && pointInRect(e.clientX, e.clientY, rRect)) {
-                rudderPointerId = e.pointerId;
-                updateRudderFromPoint(e.clientX, rRect);
-            } else if (throttlePointerId === null && pointInRect(e.clientX, e.clientY, tRect)) {
-                throttlePointerId = e.pointerId;
-                updateThrottleFromPoint(e.clientY, tRect);
+        // Touch Input Gestures (Flight Yoke Control)
+        window.addEventListener('touchstart', function(e) {
+            if(e.touches[0].clientX > window.innerWidth * 0.3) {
+                isDragging = true;
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
             }
-        });
+        }, { passive: true });
 
-        document.addEventListener('pointermove', function(e) {
-            if (e.pointerId === joystickPointerId) {
-                var dx = e.clientX - joystickCenter.x;
-                var dy = e.clientY - joystickCenter.y;
-                var dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > JOY_RADIUS) { dx = dx / dist * JOY_RADIUS; dy = dy / dist * JOY_RADIUS; }
-                joystickNub.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-                gestureInput.x = Math.max(-1, Math.min(1, dx / JOY_RADIUS));
-                gestureInput.y = Math.max(-1, Math.min(1, -dy / JOY_RADIUS));
-            } else if (e.pointerId === rudderPointerId) {
-                updateRudderFromPoint(e.clientX, rudderZone.getBoundingClientRect());
-            } else if (e.pointerId === throttlePointerId) {
-                updateThrottleFromPoint(e.clientY, throttleTrack.getBoundingClientRect());
-            }
-        });
+        window.addEventListener('touchmove', function(e) {
+            if(!isDragging) return;
+            let deltaX = e.touches[0].clientX - touchStartX;
+            let deltaY = e.touches[0].clientY - touchStartY;
+            let range = 100; 
+            gestureInput.x = Math.max(-1, Math.min(1, deltaX / range));
+            gestureInput.y = Math.max(-1, Math.min(1, -deltaY / range)); // Pitch inverted
+        }, { passive: true });
 
-        function releasePointer(e) {
-            if (e.pointerId === joystickPointerId) {
-                joystickPointerId = null;
-                gestureInput.x = 0; gestureInput.y = 0;
-                joystickNub.style.transform = 'translate(0px,0px)';
-                joystickBase.style.opacity = 0;
-            }
-            if (e.pointerId === rudderPointerId) rudderPointerId = null;
-            if (e.pointerId === throttlePointerId) throttlePointerId = null;
-        }
-        document.addEventListener('pointerup', releasePointer);
-        document.addEventListener('pointercancel', releasePointer);
+        window.addEventListener('touchend', function() {
+            isDragging = false;
+            gestureInput.x = 0; gestureInput.y = 0;
+        }, { passive: true });
 
-        function updateControlsVisuals(delta) {
-            if (rudderPointerId === null) rudderInput = THREE.MathUtils.lerp(rudderInput, 0, 6 * delta);
-            rudderIndicator.style.transform = 'translateX(' + (rudderInput * 40) + 'px)';
-            pedalLeft.style.transform = 'scale(' + (1 + Math.max(0, -rudderInput) * 0.15) + ')';
-            pedalRight.style.transform = 'scale(' + (1 + Math.max(0, rudderInput) * 0.15) + ')';
+        // HUD Control Binding
+        document.getElementById('btn-thr-up').onclick = () => physics.throttle = Math.min(1.0, physics.throttle + 0.1);
+        document.getElementById('btn-thr-dn').onclick = () => physics.throttle = Math.max(0.0, physics.throttle - 0.1);
+        document.getElementById('btn-ptrim-up').onclick = () => physics.pitchTrim += 0.02;
+        document.getElementById('btn-ptrim-dn').onclick = () => physics.pitchTrim -= 0.02;
+        document.getElementById('btn-ytrim-r').onclick = () => physics.yawTrim += 0.02;
+        document.getElementById('btn-ytrim-l').onclick = () => physics.yawTrim -= 0.02;
 
-            throttleHandle.style.bottom = (physics.throttle * 100) + '%';
-            throttleFill.style.height = (physics.throttle * 100) + '%';
-
-            yokeEl.style.transform = 'translate(-50%,-50%) rotate(' + (-gestureInput.x * 28) + 'deg) translateY(' + (-gestureInput.y * 14) + 'px)';
-        }
-
-        // --- HUD / NAVIGATION READOUTS ---
-        var asiNeedle = document.getElementById('asi-needle');
-        var asiDigital = document.getElementById('asi-digital');
-        var altDigital = document.getElementById('alt-digital');
-        var hdgPointer = document.getElementById('hdg-pointer');
-        var hdgDigital = document.getElementById('hdg-digital');
-        var navNeedle = document.getElementById('nav-needle');
-        var destName = document.getElementById('dest-name');
-        var distDigital = document.getElementById('dist-digital');
-        var etaDigital = document.getElementById('eta-digital');
-
-        function formatTime(s) {
-            s = Math.round(s);
-            var m = Math.floor(s / 60), sec = s % 60;
-            return m + ':' + (sec < 10 ? '0' : '') + sec;
-        }
-
-        function updateHUD() {
-            var knots = physics.speed * 1.94384;
-            var asiRot = -120 + Math.max(0, Math.min(1, knots / 260)) * 240;
-            asiNeedle.style.transform = 'translateX(-50%) rotate(' + asiRot + 'deg)';
-            asiDigital.textContent = Math.round(knots);
-
-            var groundH = getGroundHeight(airplane.position.x, airplane.position.z);
-            altDigital.textContent = Math.max(0, Math.round((airplane.position.y - groundH) * 3.281));
-
-            var headingDeg = ((-airplane.rotation.y * 180 / Math.PI) % 360 + 360) % 360;
-            hdgDigital.textContent = Math.round(headingDeg) + '\u00b0';
-            hdgPointer.style.transform = 'translateX(-50%) rotate(' + headingDeg + 'deg)';
-
-            if (targetAirport) {
-                var dx = targetAirport.x - airplane.position.x;
-                var dz = targetAirport.z - airplane.position.z;
-                var dist = Math.sqrt(dx * dx + dz * dz);
-                var bearingDeg = ((Math.atan2(dx, dz) * 180 / Math.PI) % 360 + 360) % 360;
-                navNeedle.style.transform = 'translateX(-50%) rotate(' + bearingDeg + 'deg)';
-                distDigital.textContent = (dist / 1000).toFixed(1) + ' km';
-                destName.textContent = targetAirport.name;
-                etaDigital.textContent = physics.speed > 3 ? formatTime(dist / physics.speed) : '--:--';
-
-                if (missionState === 'enroute' && physics.isGrounded && physics.speed < 15 && dist < targetAirport.radius) {
-                    triggerMissionComplete();
-                }
-            }
-        }
-
-        // --- MISSION OVERLAY LOGIC ---
-        var missionOverlay = document.getElementById('mission-overlay');
-        var overlayTitle = document.getElementById('overlay-title');
-        var overlaySub = document.getElementById('overlay-sub');
-        var missionCardsEl = document.getElementById('mission-cards');
-        var startBtn = document.getElementById('start-btn');
-
-        function showBriefing() {
-            overlayTitle.textContent = 'Mission ' + missionCount;
-            overlaySub.textContent = 'Fly to ' + targetAirport.name + ', about ' +
-                ((Math.hypot(targetAirport.x - airplane.position.x, targetAirport.z - airplane.position.z)) / 1000).toFixed(1) +
-                ' km away. Follow the cyan needle and land on the runway.';
-            missionCardsEl.style.display = 'none';
-            startBtn.style.display = 'block';
-            missionOverlay.style.display = 'flex';
-        }
-        startBtn.addEventListener('click', function() { missionOverlay.style.display = 'none'; });
-
-        function triggerMissionComplete() {
-            missionState = 'complete';
-            var landed = targetAirport;
-            missionCount++;
-            overlayTitle.textContent = 'Landed at ' + landed.name;
-            overlaySub.textContent = 'Nice landing! Choose your next destination.';
-            missionCardsEl.innerHTML = '';
-            missionCardsEl.style.display = 'flex';
-            startBtn.style.display = 'none';
-
-            var options = [
-                { label: 'Short hop', min: 5000, max: 8000 },
-                { label: 'Cross country', min: 9000, max: 13000 },
-                { label: 'Long haul', min: 14000, max: 19000 }
-            ];
-            options.forEach(function(o) {
-                var dist = randRange(o.min, o.max);
-                var angle = randRange(0, Math.PI * 2);
-                var x = landed.x + Math.sin(angle) * dist;
-                var z = landed.z + Math.cos(angle) * dist;
-                var card = document.createElement('div');
-                card.className = 'mission-card';
-                card.innerHTML = '<div class="mc-label">' + o.label + '</div><div class="mc-dist">' + (dist / 1000).toFixed(0) + ' km</div>';
-                card.addEventListener('pointerup', function() {
-                    targetAirport = createAirport(x, z, randRange(0, Math.PI * 2), nextAirportName());
-                    missionState = 'enroute';
-                    missionOverlay.style.display = 'none';
-                });
-                missionCardsEl.appendChild(card);
-            });
-            missionOverlay.style.display = 'flex';
-        }
-
-        // --- SIMULATOR PHYSICS LOOP RUNTIME ---
+        // Simulator Physics Engine & Aerodynamics
         function updateFlight(delta) {
             if (!delta) return;
 
-            propellerGroup.rotateZ((15 + physics.speed * 0.2) * delta);
+            // Target speed based on throttle
+            var targetSpeed = physics.throttle * physics.maxSpeed;
+            physics.speed = THREE.MathUtils.lerp(physics.speed, targetSpeed, 0.8 * delta);
 
-            var groundHeight = getGroundHeight(airplane.position.x, airplane.position.z);
-            var gearOffsetHeight = 3.5;
-            var physicalGroundCollisionLine = groundHeight + gearOffsetHeight;
+            propellerGroup.rotateZ((10 + physics.speed * 0.3) * delta);
 
-            if (airplane.position.y <= physicalGroundCollisionLine + 0.1) {
+            // Gliding Dynamics: Cutting throttle smoothly trades pitch for glide attitude
+            var idealSpeed = 70; 
+            var speedRatio = physics.speed / idealSpeed;
+            var naturalGlidePitch = (1.0 - speedRatio) * 0.15; // Pitch down on low speed, pitch up on overspeed
+
+            // Yoke Pitch/Roll Rate Processing
+            var pitchControl = (gestureInput.y * 0.7) + physics.pitchTrim - naturalGlidePitch;
+            var rollControl = (gestureInput.x * 0.8);
+            var yawControl = physics.yawTrim;
+
+            airplane.rotateX(pitchControl * delta);
+            airplane.rotateZ(-rollControl * delta);
+            airplane.rotateY(-yawControl * delta);
+
+            // Forward flight translation
+            var forwardVector = new THREE.Vector3(0, 0, 1).applyQuaternion(airplane.quaternion);
+            airplane.position.addScaledVector(forwardVector, physics.speed * delta);
+
+            // Ground Collision Detection
+            var groundHeight = getGroundHeight(airplane.position.x, airplane.position.z) + 3;
+            if (airplane.position.y <= groundHeight) {
+                airplane.position.y = groundHeight;
                 physics.isGrounded = true;
-                airplane.position.y = physicalGroundCollisionLine;
-                airplane.rotation.z = THREE.MathUtils.lerp(airplane.rotation.z, 0, 0.1); 
             } else {
                 physics.isGrounded = false;
             }
 
-            var targetElevator = 0; var targetAileron = 0;
-            var pitchSensitivity = 0.70;
-            var rollSensitivity = 0.85;
-
-            if (airplane.position.y - groundHeight < 80 && physics.speed < 55) {
-                physics.flaps = THREE.MathUtils.lerp(physics.flaps, 1.0, 2.0 * delta);
-            } else {
-                physics.flaps = THREE.MathUtils.lerp(physics.flaps, 0.0, 1.5 * delta);
+            // Natural Lift Engine
+            if (!physics.isGrounded) {
+                var lift = (physics.speed * 0.08) - 4.5;
+                airplane.position.y += lift * delta;
             }
 
-            if (physics.isGrounded) {
-                physics.rollSpeed = 0;
-                var groundYaw = rudderInput * 0.55 * delta;
-                airplane.rotateY(groundYaw);
+            updateTerrain(airplane.position);
 
-                if (gestureInput.y > 0.1 && physics.speed > 35) { 
-                    physics.pitchSpeed = pitchSensitivity * delta;
-                    targetElevator = 0.45;
-                    airplane.rotateX(physics.pitchSpeed);
-                } else { 
-                    physics.pitchSpeed = 0; 
-                }
-                physics.speed = Math.max(physics.speed - 4.5 * delta, 0);
-            } else {
-                if (Math.abs(gestureInput.y) > 0.02) {
-                    physics.pitchSpeed = gestureInput.y * pitchSensitivity * delta;
-                    targetElevator = 0.45 * gestureInput.y;
-                } else {
-                    physics.pitchSpeed *= 0.85;
-                }
-
-                if (Math.abs(gestureInput.x) > 0.02) {
-                    physics.rollSpeed = gestureInput.x * rollSensitivity * delta;
-                    targetAileron = -0.4 * gestureInput.x;
-                } else {
-                    physics.rollSpeed *= 0.85;
-                    airplane.rotation.z = THREE.MathUtils.lerp(airplane.rotation.z, 0, 2.0 * delta);
-                }
-
-                airplane.rotateX(physics.pitchSpeed);
-                airplane.rotateZ(physics.rollSpeed);
-
-                var bankAngle = airplane.rotation.z;
-                var turnRate = (bankAngle * 0.5 + rudderInput * 0.35) * delta;
-                airplane.rotateY(turnRate);
-            }
-
-            elevator.rotation.x = THREE.MathUtils.lerp(elevator.rotation.x, targetElevator, 0.15);
-            aileronL.rotation.x = THREE.MathUtils.lerp(aileronL.rotation.x, -targetAileron, 0.15);
-            aileronR.rotation.x = THREE.MathUtils.lerp(aileronR.rotation.x, targetAileron, 0.15);
-            flapL.rotation.x = THREE.MathUtils.lerp(flapL.rotation.x, physics.flaps * 0.55, 0.1);
-            flapR.rotation.x = THREE.MathUtils.lerp(flapR.rotation.x, physics.flaps * 0.55, 0.1);
-            rudderSurface.rotation.y = THREE.MathUtils.lerp(rudderSurface.rotation.y, rudderInput * 0.5, 0.2);
-
-            var targetSpeed = THREE.MathUtils.lerp(physics.minSpeed, physics.maxSpeed - (physics.flaps * 20), physics.throttle);
-            physics.speed = THREE.MathUtils.lerp(physics.speed, targetSpeed, 1.5 * delta);
-
-            var forwardVector = new THREE.Vector3(0, 0, 1).applyQuaternion(airplane.quaternion);
+            // Chase Camera Orientation
             var upVector = new THREE.Vector3(0, 1, 0).applyQuaternion(airplane.quaternion);
-            airplane.position.addScaledVector(forwardVector, physics.speed * delta);
+            camera.position.copy(airplane.position).addScaledVector(forwardVector, -32).addScaledVector(upVector, 8);
+            camera.lookAt(airplane.position.clone().addScaledVector(forwardVector, 12));
 
-            var gravitySinkingForce = physics.isGrounded ? 0 : 5.8;
-            if (physics.speed > 30) {
-                var liftValue = (physics.speed * 0.11) + (physics.flaps * 6.0);
-                airplane.position.y += ((forwardVector.y * physics.speed * 0.1 * delta) + (liftValue * delta) - (gravitySinkingForce * delta));
-            } else {
-                airplane.position.y -= (physics.isGrounded ? 0 : 75.0) * delta;
+            // Navigation Computation
+            var dest = airports[activeAirportIdx];
+            var dx = dest.x - airplane.position.x;
+            var dz = dest.z - airplane.position.z;
+            var distNM = (Math.sqrt(dx*dx + dz*dz) / 100).toFixed(1);
+            var headingDeg = Math.round((Math.atan2(dx, dz) * (180 / Math.PI) + 360) % 360);
+
+            // Switch airport objective when reaching waypoint
+            if (distNM < 2.0) {
+                activeAirportIdx = (activeAirportIdx + 1) % airports.length;
             }
 
-            updateTerrainChunks(airplane.position);
-
-            camera.position.copy(new THREE.Vector3().copy(airplane.position).addScaledVector(forwardVector, -38).addScaledVector(upVector, 9));
-            camera.lookAt(airplane.position.clone().addScaledVector(forwardVector, 15));
+            // Update Instrument HUD Display
+            document.getElementById('val-spd').innerText = Math.round(physics.speed) + " kts";
+            document.getElementById('val-alt').innerText = Math.round(airplane.position.y * 3.28) + " ft";
+            document.getElementById('val-thr').innerText = Math.round(physics.throttle * 100) + "%";
+            document.getElementById('nav-target').innerText = dest.name;
+            document.getElementById('nav-dist').innerText = distNM + " nm";
+            document.getElementById('nav-hdg').innerText = headingDeg + "°";
         }
 
-        function animate() { 
-            requestAnimationFrame(animate); 
-            delta = clock.getDelta();
-            updateFlight(delta); 
-            updateControlsVisuals(delta);
-            updateHUD();
-            renderer.render(scene, camera); 
+        function animate() {
+            requestAnimationFrame(animate);
+            var delta = clock.getDelta();
+            updateFlight(delta);
+            renderer.render(scene, camera);
         }
-        
-        window.addEventListener('resize', function() { 
-            camera.aspect = container.clientWidth / container.clientHeight; 
-            camera.updateProjectionMatrix(); 
-            renderer.setSize(container.clientWidth, container.clientHeight); 
+
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
-        
-        updateTerrainChunks(airplane.position); 
-        showBriefing();
+
+        updateTerrain(airplane.position);
         animate();
   </script>
 </body>
-    </html>
+</html>

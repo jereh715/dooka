@@ -1,0 +1,11 @@
+{
+  "id": "smartwatch",
+  "name": "smartwatch",
+  "description": "Wanna get away from the ads.",
+  "version": "1.0.0",
+  "main": "index.html",
+  "icon": "",
+  "dependencies": [
+    "yt-dlp"
+  ]
+}

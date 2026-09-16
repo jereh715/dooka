@@ -3,161 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watch 9 Bridge Interface</title>
+    <title>Smartwatch Controller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --accent: #38bdf8;
-            --text: #f8fafc;
-            --subtext: #94a3b8;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        .card {
-            background-color: var(--card);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-        }
-        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            background: #334155;
-            color: var(--subtext);
-        }
-        .active { background: #0284c7; color: #fff; }
-        input, button {
-            width: 100%;
-            padding: 12px;
-            margin-top: 10px;
-            border-radius: 8px;
-            border: 1px solid #334155;
-            background: #0f172a;
-            color: #fff;
-            box-sizing: border-box;
-        }
-        button {
-            background: var(--accent);
-            color: #0f172a;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-        }
-        button:disabled { opacity: 0.5; }
-        .device-item {
-            padding: 10px;
-            border-bottom: 1px solid #334155;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        body { background-color: #0b0f19; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <!-- Engine Status -->
-        <div class="card">
-            <h2>BLE Engine Setup</h2>
-            <div id="engine-status" class="status-badge">Checking Python Bleak...</div>
+<body class="h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-md space-y-4">
+        
+        <!-- App Title Header -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h1 class="text-xl font-bold text-sky-400">Smartwatch</h1>
+            <span id="engine-status" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 font-medium">Initializing...</span>
         </div>
 
-        <!-- Scan Controls -->
-        <div class="card">
-            <h2>Device Pairing</h2>
-            <button id="scan-btn" onclick="startScan()" disabled>Scan for Watch 9</button>
-            <div id="device-list" style="margin-top: 10px;"></div>
+        <!-- Engine Setup Section -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">BLE Engine Setup</h2>
+            <p id="status-message" class="text-xs text-slate-400">Checking Python Bleak environment...</p>
         </div>
 
-        <!-- Watch Notifications -->
-        <div class="card">
-            <h2>Send Alert to Watch</h2>
-            <input type="text" id="target-mac" placeholder="Target MAC Address (XX:XX:XX:XX:XX:XX)">
-            <input type="text" id="watch-msg" placeholder="Notification text...">
-            <button id="send-btn" onclick="sendAlert()" disabled>Push Alert to Watch</button>
+        <!-- Scanning Section -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Device Pairing</h2>
+            <button id="scan-btn" onclick="startScan()" disabled class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+                Scan for Watch 9
+            </button>
+            <div id="device-list" class="space-y-2 max-h-40 overflow-y-auto pt-1 text-xs text-slate-400"></div>
         </div>
+
+        <!-- Alert Notification Form -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Send Alert to Watch</h2>
+            <input type="text" id="target-mac" placeholder="Target MAC Address (XX:XX:XX:XX:XX:XX)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+            <input type="text" id="watch-msg" placeholder="Notification text..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+            <button id="send-btn" onclick="sendAlert()" disabled class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+                Push Alert to Watch
+            </button>
+        </div>
+
     </div>
 
-    <script>
-        let isEngineReady = false;
+<script>
+// Use case-exact app name matching your directory/module naming convention
+const APP_NAME = "Smartwatch";
 
-        async function callPython(funcName, params = {}) {
-            if (window.Operat && window.Operat.call) {
-                return JSON.parse(await window.Operat.call(funcName, JSON.stringify(params)));
+// Fallback dispatcher handling case-sensitive route mismatches (Smartwatch vs smartwatch)
+async function callBackend(endpoint, params = {}) {
+    const queryParams = new URLSearchParams(params).toString();
+    const targets = [APP_NAME, APP_NAME.toLowerCase()];
+
+    for (const appTarget of targets) {
+        try {
+            const url = `/runner/api/${appTarget}/${endpoint}${queryParams ? '?' + queryParams : ''}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                return data.data || data;
             }
-            console.log(`[Bridge Simulation] Called ${funcName} with`, params);
-            return { success: true, message: "Simulated response" };
+        } catch (e) {
+            console.warn(`[API Attempt Failed on /${appTarget}/]:`, e);
         }
+    }
+    return { success: false, error: "Failed to locate endpoint under Smartwatch or smartwatch routes." };
+}
 
-        async function pollStatus() {
-            const res = await callPython("get_bleak_status");
-            const badge = document.getElementById("engine-status");
-            
-            if (res.is_installed) {
-                badge.innerText = "Bleak Installed & Ready";
-                badge.classList.add("active");
-                document.getElementById("scan-btn").disabled = false;
-                document.getElementById("send-btn").disabled = false;
-                isEngineReady = true;
-            } else if (res.is_installing) {
-                badge.innerText = res.message || "Downloading Bleak...";
-                setTimeout(pollStatus, 2000);
-            } else {
-                badge.innerText = "Error: " + (res.error || "Failed to load");
-            }
-        }
+async function pollStatus() {
+    const statusMsg = document.getElementById("status-message");
+    const badge = document.getElementById("engine-status");
 
-        async function startScan() {
-            const list = document.getElementById("device-list");
-            list.innerHTML = "Scanning BLE spectrum...";
-            const res = await callPython("scan_for_watches");
-            
-            if (res.success && res.devices.length > 0) {
-                list.innerHTML = "";
-                res.devices.forEach(dev => {
-                    const item = document.createElement("div");
-                    item.className = "device-item";
-                    item.innerHTML = `<span><b>${dev.name}</b><br><small>${dev.address}</small></span>
-                        <button style="width:auto; padding:6px 12px;" onclick="selectDevice('${dev.address}')">Select</button>`;
-                    list.appendChild(item);
-                });
-            } else {
-                list.innerHTML = "No devices found. Make sure Bluetooth is turned on.";
-            }
-        }
+    const res = await callBackend("get_bleak_status");
 
-        function selectDevice(address) {
-            document.getElementById("target-mac").value = address;
-        }
+    if (res.is_installed) {
+        badge.innerText = "Ready";
+        badge.className = "text-xs px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-400 font-medium";
+        statusMsg.innerText = "Bleak package fully installed and active.";
+        document.getElementById("scan-btn").disabled = false;
+        document.getElementById("send-btn").disabled = false;
+    } else if (res.is_installing) {
+        badge.innerText = "Installing";
+        badge.className = "text-xs px-2.5 py-1 rounded-full bg-amber-950 text-amber-400 font-medium";
+        statusMsg.innerText = res.message || "Downloading dependencies...";
+        setTimeout(pollStatus, 2500);
+    } else {
+        badge.innerText = "Error";
+        badge.className = "text-xs px-2.5 py-1 rounded-full bg-rose-950 text-rose-400 font-medium";
+        statusMsg.innerText = res.error || "Failed to establish bridge connection.";
+    }
+}
 
-        async function sendAlert() {
-            const address = document.getElementById("target-mac").value;
-            const message = document.getElementById("watch-msg").value;
-            if (!address || !message) return alert("Enter both MAC address and message.");
+async function startScan() {
+    const list = document.getElementById("device-list");
+    list.innerHTML = "<p class='text-sky-400 animate-pulse'>Scanning BLE spectrum...</p>";
+    
+    const res = await callBackend("scan_for_watches");
 
-            const res = await callPython("send_watch_notification", { address, message });
-            if (res.success) {
-                alert("Alert pushed successfully!");
-            } else {
-                alert("Failed: " + res.error);
-            }
-        }
+    if (res.success && res.devices && res.devices.length > 0) {
+        list.innerHTML = "";
+        res.devices.forEach(dev => {
+            const row = document.createElement("div");
+            row.className = "flex items-center justify-between p-2 bg-slate-950 rounded-lg border border-slate-800";
+            row.innerHTML = `
+                <div>
+                    <div class="font-bold text-white">${dev.name}</div>
+                    <div class="text-[10px] text-slate-500 font-mono">${dev.address}</div>
+                </div>
+                <button onclick="selectDevice('${dev.address}')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded text-[11px] font-semibold">Select</button>
+            `;
+            list.appendChild(row);
+        });
+    } else {
+        list.innerHTML = `<p class="text-rose-400">${res.error || "No devices found. Ensure location & Bluetooth are enabled."}</p>`;
+    }
+}
 
-        // Start initialization polling
-        pollStatus();
-    </script>
+function selectDevice(address) {
+    document.getElementById("target-mac").value = address;
+}
+
+async function sendAlert() {
+    const address = document.getElementById("target-mac").value.trim();
+    const message = document.getElementById("watch-msg").value.trim();
+
+    if (!address || !message) {
+        alert("Please specify both a target MAC address and notification message.");
+        return;
+    }
+
+    const btn = document.getElementById("send-btn");
+    btn.disabled = true;
+    btn.innerText = "Transmitting...";
+
+    const res = await callBackend("send_watch_notification", { address, message });
+
+    if (res.success) {
+        alert("Notification pushed to Watch!");
+        document.getElementById("watch-msg").value = "";
+    } else {
+        alert("Transmission error: " + (res.error || "Failed to reach device"));
+    }
+
+    btn.disabled = false;
+    btn.innerText = "Push Alert to Watch";
+}
+
+pollStatus();
+</script>
 </body>
 </html>

@@ -21,13 +21,26 @@
             <span id="engine-status" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 font-medium">Initializing...</span>
         </div>
 
-        <!-- Engine Setup Section -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
-            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">BLE Engine Setup</h2>
-            <p id="status-message" class="text-xs text-slate-400">Checking Python Bleak environment...</p>
+        <!-- Engine Setup Section with Progress Bar -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="flex justify-between items-center text-xs font-semibold text-slate-300">
+                <span class="uppercase tracking-wider">BLE Engine Setup</span>
+                <span id="progress-percent" class="text-sky-400 font-mono">0%</span>
+            </div>
+            
+            <!-- Progress Bar Track -->
+            <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                <div id="progress-bar" class="bg-sky-500 h-2.5 rounded-full transition-all duration-300 w-0"></div>
+            </div>
+
+            <p id="status-message" class="text-xs text-slate-400 font-mono truncate">Checking environment...</p>
+
+            <!-- Console Log Output -->
+            <div id="terminal-log" class="bg-slate-950 p-2 rounded-lg border border-slate-800/80 text-[10px] font-mono text-slate-500 h-16 overflow-y-auto hidden space-y-0.5">
+            </div>
         </div>
 
-        <!-- Scanning Section -->
+        <!-- Device Pairing Section -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
             <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Device Pairing</h2>
             <button id="scan-btn" onclick="startScan()" disabled class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
@@ -49,10 +62,9 @@
     </div>
 
 <script>
-// Use case-exact app name matching your directory/module naming convention
 const APP_NAME = "Smartwatch";
 
-// Fallback dispatcher handling case-sensitive route mismatches (Smartwatch vs smartwatch)
+// Robust Dispatcher with route fallback for Smartwatch vs smartwatch
 async function callBackend(endpoint, params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     const targets = [APP_NAME, APP_NAME.toLowerCase()];
@@ -66,33 +78,47 @@ async function callBackend(endpoint, params = {}) {
                 return data.data || data;
             }
         } catch (e) {
-            console.warn(`[API Attempt Failed on /${appTarget}/]:`, e);
+            console.warn(`Attempt failed on /${appTarget}/`);
         }
     }
-    return { success: false, error: "Failed to locate endpoint under Smartwatch or smartwatch routes." };
+    return { success: false, error: "Endpoint unreachable." };
 }
 
+// Polls backend status and updates progress elements
 async function pollStatus() {
     const statusMsg = document.getElementById("status-message");
     const badge = document.getElementById("engine-status");
+    const progressBar = document.getElementById("progress-bar");
+    const progressPercent = document.getElementById("progress-percent");
+    const term = document.getElementById("terminal-log");
 
     const res = await callBackend("get_bleak_status");
 
     if (res.is_installed) {
         badge.innerText = "Ready";
         badge.className = "text-xs px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-400 font-medium";
-        statusMsg.innerText = "Bleak package fully installed and active.";
+        statusMsg.innerText = "Bleak environment active.";
+        progressBar.style.width = "100%";
+        progressPercent.innerText = "100%";
+        term.classList.add("hidden");
         document.getElementById("scan-btn").disabled = false;
         document.getElementById("send-btn").disabled = false;
-    } else if (res.is_installing) {
-        badge.innerText = "Installing";
-        badge.className = "text-xs px-2.5 py-1 rounded-full bg-amber-950 text-amber-400 font-medium";
-        statusMsg.innerText = res.message || "Downloading dependencies...";
-        setTimeout(pollStatus, 2500);
     } else {
-        badge.innerText = "Error";
-        badge.className = "text-xs px-2.5 py-1 rounded-full bg-rose-950 text-rose-400 font-medium";
-        statusMsg.innerText = res.error || "Failed to establish bridge connection.";
+        const pct = res.progress || 0;
+        progressBar.style.width = `${pct}%`;
+        progressPercent.innerText = `${pct}%`;
+        
+        badge.innerText = "Installing";
+        badge.className = "text-xs px-2.5 py-1 rounded-full bg-amber-950 text-amber-400 font-medium animate-pulse";
+        statusMsg.innerText = res.status || "Downloading dependencies...";
+
+        if (res.logs && res.logs.length > 0) {
+            term.classList.remove("hidden");
+            term.innerHTML = res.logs.map(line => `<div>> ${line}</div>`).join('');
+            term.scrollTop = term.scrollHeight;
+        }
+
+        setTimeout(pollStatus, 1000);
     }
 }
 
@@ -117,7 +143,7 @@ async function startScan() {
             list.appendChild(row);
         });
     } else {
-        list.innerHTML = `<p class="text-rose-400">${res.error || "No devices found. Ensure location & Bluetooth are enabled."}</p>`;
+        list.innerHTML = `<p class="text-rose-400">${res.error || "No devices found. Check Bluetooth & permissions."}</p>`;
     }
 }
 
@@ -130,7 +156,7 @@ async function sendAlert() {
     const message = document.getElementById("watch-msg").value.trim();
 
     if (!address || !message) {
-        alert("Please specify both a target MAC address and notification message.");
+        alert("Enter both MAC address and message text.");
         return;
     }
 
@@ -141,7 +167,7 @@ async function sendAlert() {
     const res = await callBackend("send_watch_notification", { address, message });
 
     if (res.success) {
-        alert("Notification pushed to Watch!");
+        alert("Notification sent!");
         document.getElementById("watch-msg").value = "";
     } else {
         alert("Transmission error: " + (res.error || "Failed to reach device"));

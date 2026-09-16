@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "main": "index.html",
   "icon": "",
+  "debug": "true",
   "dependencies": [
     "yt-dlp"
   ]

@@ -64,7 +64,7 @@
 <script>
 const APP_NAME = "Smartwatch";
 
-// Robust Dispatcher with route fallback for Smartwatch vs smartwatch
+// Dispatcher with route fallback and proper query encoding
 async function callBackend(endpoint, params = {}) {
     const queryParams = new URLSearchParams(params).toString();
     const targets = [APP_NAME, APP_NAME.toLowerCase()];
@@ -84,7 +84,7 @@ async function callBackend(endpoint, params = {}) {
     return { success: false, error: "Endpoint unreachable." };
 }
 
-// Polls backend status and updates progress elements
+// Polls backend status and keeps state in sync
 async function pollStatus() {
     const statusMsg = document.getElementById("status-message");
     const badge = document.getElementById("engine-status");
@@ -108,9 +108,16 @@ async function pollStatus() {
         progressBar.style.width = `${pct}%`;
         progressPercent.innerText = `${pct}%`;
         
-        badge.innerText = "Installing";
-        badge.className = "text-xs px-2.5 py-1 rounded-full bg-amber-950 text-amber-400 font-medium animate-pulse";
-        statusMsg.innerText = res.status || "Downloading dependencies...";
+        // Handle installation error vs active installation
+        if (res.status && res.status.startsWith("Error:")) {
+            badge.innerText = "Failed";
+            badge.className = "text-xs px-2.5 py-1 rounded-full bg-rose-950 text-rose-400 font-medium";
+            statusMsg.innerText = res.status;
+        } else {
+            badge.innerText = "Installing";
+            badge.className = "text-xs px-2.5 py-1 rounded-full bg-amber-950 text-amber-400 font-medium animate-pulse";
+            statusMsg.innerText = res.status || "Downloading dependencies...";
+        }
 
         if (res.logs && res.logs.length > 0) {
             term.classList.remove("hidden");
@@ -118,12 +125,16 @@ async function pollStatus() {
             term.scrollTop = term.scrollHeight;
         }
 
+        // Re-poll until installation finishes
         setTimeout(pollStatus, 1000);
     }
 }
 
 async function startScan() {
     const list = document.getElementById("device-list");
+    const btn = document.getElementById("scan-btn");
+    
+    btn.disabled = true;
     list.innerHTML = "<p class='text-sky-400 animate-pulse'>Scanning BLE spectrum...</p>";
     
     const res = await callBackend("scan_for_watches");
@@ -145,6 +156,8 @@ async function startScan() {
     } else {
         list.innerHTML = `<p class="text-rose-400">${res.error || "No devices found. Check Bluetooth & permissions."}</p>`;
     }
+    
+    btn.disabled = false;
 }
 
 function selectDevice(address) {

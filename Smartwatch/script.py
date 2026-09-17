@@ -22,7 +22,9 @@ def check_bleak():
         install_state["status"] = "Bleak fully loaded and ready."
         return True
     except ImportError:
-        install_state["is_installed"] = False
+        # Prevent resetting install_state while an installation thread is actively running
+        if not install_state["is_installing"]:
+            install_state["is_installed"] = False
         return False
 
 def install_bleak_worker():
@@ -77,6 +79,7 @@ def install_bleak_worker():
 
         process.wait()
         
+        # Final import check after pip process completes
         if check_bleak():
             install_state["progress"] = 100
             install_state["status"] = "Ready"
@@ -88,8 +91,8 @@ def install_bleak_worker():
         install_state["is_installing"] = False
         install_state["status"] = f"Error: {str(e)}"
 
-# Start background install check on import
-if not check_bleak():
+# Start background install check on import ONLY if not already in progress
+if not check_bleak() and not install_state["is_installing"]:
     threading.Thread(target=install_bleak_worker, daemon=True).start()
 
 # API Endpoints

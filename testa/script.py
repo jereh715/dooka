@@ -17,15 +17,13 @@ try:
     context = Python.getPlatform().getApplication()
     APP_FILES_DIR = str(context.getFilesDir().getAbsolutePath())
 except (ImportError, ModuleNotFoundError, AttributeError, Exception):
-    # Fallback when running inside standard Python web host or app runner environment
     APP_FILES_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 2. Configure Storage Paths
 LOCAL_LIB_DIR = os.path.join(APP_FILES_DIR, "libs")
-DOWNLOAD_DIR = os.path.join(APP_FILES_DIR, "audio_downloads")
+CACHE_FILE = os.path.join(APP_FILES_DIR, "track_cache.json")
 
-for folder in [LOCAL_LIB_DIR, DOWNLOAD_DIR]:
-    os.makedirs(folder, exist_ok=True)
+os.makedirs(LOCAL_LIB_DIR, exist_ok=True)
 
 if LOCAL_LIB_DIR not in sys.path:
     sys.path.insert(0, LOCAL_LIB_DIR)
@@ -43,7 +41,6 @@ def install_ytdlp_background():
     INSTALLATION_STATUS["is_installing"] = True
     INSTALLATION_STATUS["message"] = "Downloading yt-dlp..."
 
-    # Method 1: In-Process Installation via runpy (Chaquopy Safe)
     try:
         import runpy
         sys.argv = ['pip', 'install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet']
@@ -65,7 +62,6 @@ def install_ytdlp_background():
     except Exception as e1:
         print(f"[RUNPY PIP FAILED]: {e1}")
 
-    # Method 2: Direct Zip Archive Extraction Fallback (with Timeout & Headers)
     try:
         INSTALLATION_STATUS["message"] = "Downloading zip archive..."
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
@@ -116,25 +112,54 @@ def get_install_status(params=None):
         "error": INSTALLATION_STATUS.get("error")
     }
 
-# 4. Audio Streaming & File Operations
+# 4. Local Track Details Cache Helpers
+def _load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_cache(cache_data):
+    try:
+        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[CACHE WRITE ERROR]: {e}")
+
+# 5. Fast Audio Streaming & Caching
 def stream_and_trigger_download(params=None):
+    if not params or not params.get("query"):
+        return {"success": False, "error": "No query provided."}
+
+    query = params.get("query").strip().lower()
+    cache = _load_cache()
+
+    # 1. Fast path: return cached track metadata directly
+    if query in cache:
+        cached_item = cache[query]
+        cached_item["from_cache"] = True
+        return cached_item
+
     if not check_or_start_install():
         return {"success": False, "error": f"yt-dlp not ready: {INSTALLATION_STATUS['message']}"}
 
     import yt_dlp
 
-    if not params or not params.get("query"):
-        return {"success": False, "error": "No query provided."}
-
-    query = params.get("query")
-
+    # Speed-optimized YoutubeDL configuration
     ydl_opts = {
-        'format': 'worstaudio[ext=m4a]/worstaudio[ext=webm]/worstaudio/worst',
+        'format': 'ba[ext=m4a]/ba[ext=webm]/ba/worst',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
         'default_search': 'ytsearch1',
         'nocheckcertificate': True,
+        'skip_download': True,
+        'extract_flat': False,
+        'socket_timeout': 5,
+        'source_address': '0.0.0.0',
     }
 
     try:
@@ -144,94 +169,52 @@ def stream_and_trigger_download(params=None):
 
             video_id = video.get('id')
             stream_url = video.get('url')
-            ext = video.get('ext', 'm4a')
-            file_name = f"{video_id}.{ext}"
-            file_path = os.path.join(DOWNLOAD_DIR, file_name)
 
-            is_saved = os.path.exists(file_path)
+            if not stream_url:
+                return {"success": False, "error": "No stream URL extracted."}
 
-            if not stream_url and not is_saved:
-                return {"success": False, "error": "No playable stream found."}
-
-            if not is_saved:
-                thread = threading.Thread(target=_silent_download_worker, args=(query, file_path))
-                thread.daemon = True
-                thread.start()
-
-            return {
+            result = {
                 "success": True,
                 "id": video_id,
                 "title": video.get('title', 'Unknown Title'),
                 "artist": video.get('uploader', 'Unknown Artist'),
                 "thumbnail": video.get('thumbnail', ''),
                 "stream_url": stream_url,
-                "file_name": file_name,
-                "is_saved": is_saved
+                "duration": video.get('duration', 0),
+                "from_cache": False
             }
+
+            # Cache search query result locally
+            cache[query] = result
+            if video_id:
+                cache[video_id] = result
+            _save_cache(cache)
+
+            return result
 
     except Exception as e:
         return {"success": False, "error": f"Extraction error: {str(e)}"}
 
-def _silent_download_worker(query, target_path):
-    import yt_dlp
-    
-    # Download to an isolated temporary file to avoid breaking active stream handles
-    temp_path = f"{target_path}.tmp"
-    
-    ydl_opts = {
-        'format': 'worstaudio[ext=m4a]/worstaudio[ext=webm]/worstaudio/worst',
-        'outtmpl': temp_path,
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True,
-        'default_search': 'ytsearch1',
-        'nocheckcertificate': True,
-        'overwrites': True
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([f"ytsearch1:{query}"])
-        
-        # Atomically move the completed download to target path
-        if os.path.exists(temp_path):
-            os.replace(temp_path, target_path)
-    except Exception as e:
-        print(f"Background download failed for {query}: {e}")
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
+def get_cached_tracks(params=None):
+    """Retrieve all previously searched and saved track details."""
+    cache = _load_cache()
+    unique_tracks = {}
+    for key, item in cache.items():
+        if isinstance(item, dict) and "id" in item:
+            unique_tracks[item["id"]] = item
+    return {"success": True, "tracks": list(unique_tracks.values())}
 
-def check_file_status(params=None):
-    if not params or not params.get("file_name"):
-        return {"success": True, "is_saved": False}
-    file_path = os.path.join(DOWNLOAD_DIR, params.get("file_name"))
-    return {"success": True, "is_saved": os.path.exists(file_path)}
-
-def get_local_audio(params=None):
-    if not params or not params.get("file_name"):
-        return {"success": False, "error": "No file name provided."}
-    file_name = params.get("file_name")
-    file_path = os.path.join(DOWNLOAD_DIR, file_name)
-    if os.path.exists(file_path):
-        return {"success": True, "file_path": file_path, "is_saved": True}
-    return {"success": False, "error": "File not found.", "is_saved": False}
-
-def delete_local_file(params=None):
-    if not params or not params.get("file"):
-        return {"success": False, "error": "No file name provided."}
-    
-    file_path = os.path.join(DOWNLOAD_DIR, params.get("file"))
-    if os.path.exists(file_path):
+def clear_cache(params=None):
+    """Clear local cached track details."""
+    if os.path.exists(CACHE_FILE):
         try:
-            os.remove(file_path)
-            return {"success": True}
+            os.remove(CACHE_FILE)
+            return {"success": True, "message": "Cache cleared successfully."}
         except Exception as e:
-            return {"success": False, "error": f"Failed to delete file: {str(e)}"}
-    return {"success": False, "error": "File not found."}
+            return {"success": False, "error": str(e)}
+    return {"success": True, "message": "Cache was already empty."}
 
-# 5. Lyrics Parsing and Fetching
+# 6. Lyrics Parsing and Fetching
 def parse_lrc(lrc_text):
     if not lrc_text:
         return []
@@ -252,17 +235,15 @@ def get_lyrics(params=None):
 
     query = params.get("query").strip()
     
-    # Primary provider: LRCLIB API
+    # Provider 1: LRCLIB API (Primary for synced/unsynced .lrc)
     try:
         url = f"https://lrclib.net/api/search?q={urllib.parse.quote(query)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=6) as response:
             data = json.loads(response.read().decode())
-            
             if data and isinstance(data, list) and len(data) > 0:
                 best_match = next((item for item in data if item.get('syncedLyrics')), data[0])
-                
                 synced_lrc = best_match.get('syncedLyrics')
                 plain_lrc = best_match.get('plainLyrics')
                 
@@ -285,11 +266,11 @@ def get_lyrics(params=None):
     except Exception as e:
         print(f"[DEBUG] LRCLIB Fetch Error: {e}")
 
-    # Fallback provider: MegaloBiz Regex Fetch
+    # Provider 2: MegaloBiz
     try:
         search_url = f"https://www.megalobiz.com/searchall?qv={urllib.parse.quote(query)}"
         req = urllib.request.Request(search_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=6) as response:
             html = response.read().decode()
             lrc_matches = re.findall(r'\[\d{2}:\d{2}\.\d{2,3}\].*', html)
             if lrc_matches:
@@ -302,6 +283,40 @@ def get_lyrics(params=None):
                     "parsed": parse_lrc(raw_lrc)
                 }
     except Exception as e:
-        print(f"[DEBUG] Fallback Fetch Error: {e}")
+        print(f"[DEBUG] MegaloBiz Fetch Error: {e}")
+
+    # Provider 3: Fallback Plaintext Scraper for Regional Hits (e.g., "Wewe Ni Wangu")
+    try:
+        genius_url = f"https://genius.com/api/search/multi?q={urllib.parse.quote(query)}"
+        req = urllib.request.Request(genius_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=6) as response:
+            res_json = json.loads(response.read().decode())
+            sections = res_json.get('response', {}).get('sections', [])
+            song_path = None
+            for sec in sections:
+                if sec.get('type') == 'song' and sec.get('hits'):
+                    song_path = sec['hits'][0]['result']['path']
+                    break
+            
+            if song_path:
+                song_url = f"https://genius.com{song_path}"
+                req_page = urllib.request.Request(song_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req_page, timeout=6) as page_res:
+                    page_html = page_res.read().decode()
+                    # Clean div tags to extract raw lyrics text
+                    raw_text = re.sub(r'<br\s*/?>', '\n', page_html)
+                    raw_text = re.sub(r'<[^>]+>', '', raw_text)
+                    lyrics_match = re.search(r'\[Lyrics.*?\n([\s\S]*?)(?=\n\[|\Z)', raw_text)
+                    if lyrics_match:
+                        cleaned_lyrics = lyrics_match.group(1).strip()
+                        return {
+                            "success": True,
+                            "query": query,
+                            "is_synced": False,
+                            "raw": cleaned_lyrics,
+                            "parsed": []
+                        }
+    except Exception as e:
+        print(f"[DEBUG] Fallback Plaintext Scraper Error: {e}")
 
     return {"success": False, "message": "No lyrics found for this search."}

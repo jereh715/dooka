@@ -148,7 +148,6 @@ def stream_and_trigger_download(params=None):
 
     import yt_dlp
 
-    # Speed-optimized YoutubeDL configuration
     ydl_opts = {
         'format': 'ba[ext=m4a]/ba[ext=webm]/ba/worst',
         'noplaylist': True,
@@ -184,7 +183,6 @@ def stream_and_trigger_download(params=None):
                 "from_cache": False
             }
 
-            # Cache search query result locally
             cache[query] = result
             if video_id:
                 cache[video_id] = result
@@ -194,6 +192,81 @@ def stream_and_trigger_download(params=None):
 
     except Exception as e:
         return {"success": False, "error": f"Extraction error: {str(e)}"}
+
+# 6. Recommendation Logic (Autoplay / Shuffle Related Songs)
+def get_recommendations(params=None):
+    """Find related songs using yt-dlp based on a track ID or search query."""
+    if not params or not (params.get("id") or params.get("query")):
+        return {"success": False, "error": "Track ID or Query required."}
+
+    track_id = params.get("id")
+    query = params.get("query", "").strip()
+
+    if not check_or_start_install():
+        return {"success": False, "error": "yt-dlp engine not ready."}
+
+    import yt_dlp
+
+    cache = _load_cache()
+    search_target = f"https://www.youtube.com/watch?v={track_id}" if track_id else f"ytsearch5:{query} music"
+
+    ydl_opts = {
+        'format': 'ba[ext=m4a]/ba[ext=webm]/ba/worst',
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+        'nocheckcertificate': True,
+        'skip_download': True,
+        'extract_flat': False,
+        'socket_timeout': 5,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(search_target, download=False)
+            
+            # Extract related entries or search results
+            entries = []
+            if 'related_videos' in info and info['related_videos']:
+                entries = info['related_videos'][:5]
+            elif 'entries' in info:
+                entries = info['entries'][1:6]  # Skip index 0 if it's the current query match
+
+            recommendations = []
+            for entry in entries:
+                vid_id = entry.get('id')
+                if not vid_id:
+                    continue
+
+                # If already in local cache, use cached details
+                if vid_id in cache:
+                    recommendations.append(cache[vid_id])
+                    continue
+
+                # Fast extract stream info for recommended song
+                try:
+                    rec_info = ydl.extract_info(f"https://www.youtube.com/watch?v={vid_id}", download=False)
+                    rec_result = {
+                        "success": True,
+                        "id": vid_id,
+                        "title": rec_info.get('title', 'Unknown Title'),
+                        "artist": rec_info.get('uploader', 'Unknown Artist'),
+                        "thumbnail": rec_info.get('thumbnail', ''),
+                        "stream_url": rec_info.get('url', ''),
+                        "duration": rec_info.get('duration', 0),
+                        "from_cache": False
+                    }
+                    if rec_result["stream_url"]:
+                        cache[vid_id] = rec_result
+                        recommendations.append(rec_result)
+                except Exception:
+                    continue
+
+            _save_cache(cache)
+            return {"success": True, "recommendations": recommendations}
+
+    except Exception as e:
+        return {"success": False, "error": f"Failed to get recommendations: {str(e)}"}
 
 def get_cached_tracks(params=None):
     """Retrieve all previously searched and saved track details."""
@@ -214,7 +287,7 @@ def clear_cache(params=None):
             return {"success": False, "error": str(e)}
     return {"success": True, "message": "Cache was already empty."}
 
-# 6. Lyrics Parsing and Fetching
+# 7. Lyrics Parsing and Fetching
 def parse_lrc(lrc_text):
     if not lrc_text:
         return []
@@ -235,7 +308,7 @@ def get_lyrics(params=None):
 
     query = params.get("query").strip()
     
-    # Provider 1: LRCLIB API (Primary for synced/unsynced .lrc)
+    # Provider 1: LRCLIB API
     try:
         url = f"https://lrclib.net/api/search?q={urllib.parse.quote(query)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -285,7 +358,7 @@ def get_lyrics(params=None):
     except Exception as e:
         print(f"[DEBUG] MegaloBiz Fetch Error: {e}")
 
-    # Provider 3: Fallback Plaintext Scraper for Regional Hits (e.g., "Wewe Ni Wangu")
+    # Provider 3: Fallback Plaintext Scraper
     try:
         genius_url = f"https://genius.com/api/search/multi?q={urllib.parse.quote(query)}"
         req = urllib.request.Request(genius_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -303,7 +376,6 @@ def get_lyrics(params=None):
                 req_page = urllib.request.Request(song_url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req_page, timeout=6) as page_res:
                     page_html = page_res.read().decode()
-                    # Clean div tags to extract raw lyrics text
                     raw_text = re.sub(r'<br\s*/?>', '\n', page_html)
                     raw_text = re.sub(r'<[^>]+>', '', raw_text)
                     lyrics_match = re.search(r'\[Lyrics.*?\n([\s\S]*?)(?=\n\[|\Z)', raw_text)

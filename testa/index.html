@@ -2,167 +2,115 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Web Music Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #000000; color: #b3b3b3; font-family: system-ui, -apple-system, sans-serif; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #282828; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #3e3e3e; }
-        .lyric-line { transition: color 0.2s ease, transform 0.2s ease, font-size 0.2s ease; }
-        .lyric-active { color: #ffffff !important; font-weight: 700; transform: scale(1.03); transform-origin: left; }
+        body { background: #000; color: #b3b3b3; font-family: system-ui, -apple-system, sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        .lyric-line { transition: color 0.2s, transform 0.2s; }
+        .lyric-active { color: #fff !important; font-weight: 700; transform: scale(1.02); transform-origin: left; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden select-none">
 
-    <!-- Top & Main Container -->
-    <div class="flex-1 flex overflow-hidden p-2 gap-2 relative">
+    <!-- Top Bar: App Name & Engine Status -->
+    <header class="p-3 bg-[#121212] border-b border-[#282828] flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2 text-white font-bold text-base">
+            <svg class="w-6 h-6 text-[#1db954]" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.376 0 0 5.376 0 12s5.376 12 12 12 12-5.376 12-12S18.624 0 12 0zm5.521 17.341c-.219.359-.691.475-1.049.257-2.868-1.753-6.478-2.15-10.732-1.178-.403.092-.806-.164-.899-.567-.093-.403.164-.806.567-.899 4.656-1.064 8.653-.611 11.855 1.348.358.218.474.69.258 1.039zm1.474-3.277c-.276.448-.868.591-1.316.315-3.282-2.016-8.288-2.602-12.172-1.423-.505.153-1.037-.134-1.19-.639-.153-.505.134-1.037.639-1.19 4.437-1.347 9.947-.7 13.724 1.621.448.276.591.868.315 1.316zm.126-3.416C15.228 8.441 8.8 8.225 5.12 9.342c-.611.186-1.258-.168-1.444-.778-.186-.611.168-1.258.778-1.444 4.228-1.284 11.31-1.03 15.861 1.673.551.327.733 1.039.406 1.59-.327.551-1.039.733-1.59.406z"/>
+            </svg>
+            <span>Player</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+            <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
+            <span id="status-text" class="text-gray-400 font-medium truncate max-w-[120px]">Checking...</span>
+            <button onclick="clearServerCache()" class="p-1 text-gray-400 hover:text-white" title="Clear Cache">🗑️</button>
+        </div>
+    </header>
 
-        <!-- Sidebar Navigation (Desktop) -->
-        <aside class="w-64 bg-[#121212] rounded-lg p-4 flex flex-col justify-between shrink-0 hidden md:flex">
-            <div class="space-y-6">
-                <div class="flex items-center gap-2 text-white font-bold text-lg px-2">
-                    <svg class="w-7 h-7 text-[#1db954]" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 0C5.376 0 0 5.376 0 12s5.376 12 12 12 12-5.376 12-12S18.624 0 12 0zm5.521 17.341c-.219.359-.691.475-1.049.257-2.868-1.753-6.478-2.15-10.732-1.178-.403.092-.806-.164-.899-.567-.093-.403.164-.806.567-.899 4.656-1.064 8.653-.611 11.855 1.348.358.218.474.69.258 1.039zm1.474-3.277c-.276.448-.868.591-1.316.315-3.282-2.016-8.288-2.602-12.172-1.423-.505.153-1.037-.134-1.19-.639-.153-.505.134-1.037.639-1.19 4.437-1.347 9.947-.7 13.724 1.621.448.276.591.868.315 1.316zm.126-3.416C15.228 8.441 8.8 8.225 5.12 9.342c-.611.186-1.258-.168-1.444-.778-.186-.611.168-1.258.778-1.444 4.228-1.284 11.31-1.03 15.861 1.673.551.327.733 1.039.406 1.59-.327.551-1.039.733-1.59.406z"/>
-                    </svg>
-                    <span>Player</span>
-                </div>
-
-                <nav class="space-y-4 text-sm font-semibold">
-                    <a href="#" class="flex items-center gap-4 text-white hover:text-white transition px-2">
-                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-                        Home
-                    </a>
-                </nav>
-            </div>
-            
-            <div class="px-2">
-                <button onclick="clearServerCache()" class="w-full py-2 bg-[#242424] hover:bg-[#2a2a2a] text-xs font-semibold text-gray-400 hover:text-white rounded-md transition">
-                    Clear Track Cache
-                </button>
-            </div>
-        </aside>
-
-        <!-- Main Content Panel -->
-        <main class="flex-1 bg-[#121212] rounded-lg flex flex-col overflow-hidden">
-
-            <!-- Header Search Bar & Status Indicator -->
-            <header class="p-4 bg-[#121212]/90 backdrop-blur border-b border-[#282828]/50 flex flex-col gap-2">
-                <div class="flex items-center justify-between gap-3">
-                    <div class="relative flex-1">
-                        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                        </svg>
-                        <input 
-                            type="text" 
-                            id="search-input" 
-                            placeholder="What do you want to play?" 
-                            class="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white text-sm rounded-full pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-white/20 transition placeholder-gray-400"
-                            onkeydown="if(event.key === 'Enter') addAndPlayTrack()"
-                        />
-                    </div>
-                    <button 
-                        id="add-btn"
-                        onclick="addAndPlayTrack()" 
-                        class="bg-[#1db954] hover:scale-105 active:scale-95 text-black font-bold text-sm px-6 py-2.5 rounded-full transition-all flex items-center justify-center shrink-0"
-                    >
-                        Play
-                    </button>
-                </div>
-
-                <!-- Live Status & Error Alert Bar -->
-                <div class="flex items-center justify-between px-2 text-xs">
-                    <div class="flex items-center gap-2">
-                        <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
-                        <span id="status-text" class="text-gray-400 font-medium truncate">Checking engine...</span>
-                    </div>
-                    <div id="error-message" class="text-red-400 text-xs hidden font-medium"></div>
-                </div>
-            </header>
-
-            <!-- Scrollable Track Queue -->
-            <div class="flex-1 overflow-y-auto p-4 md:p-6">
-                <div class="flex justify-between items-end mb-4">
-                    <h2 class="text-white text-xl font-bold tracking-tight">Queue</h2>
-                    <span class="text-xs text-gray-400 font-semibold"><span id="queue-count">0</span> tracks</span>
-                </div>
-
-                <!-- Table Header -->
-                <div class="grid grid-cols-[16px_1fr_auto_auto] gap-4 px-4 py-2 text-xs font-semibold text-gray-400 border-b border-[#282828] mb-2">
-                    <span>#</span>
-                    <span>Title</span>
-                    <span class="text-right">Source</span>
-                    <span class="w-6"></span>
-                </div>
-
-                <!-- Track List -->
-                <div id="queue-list" class="space-y-1"></div>
-            </div>
-        </main>
-
-        <!-- Spotify-style Side Lyrics Overlay Panel -->
-        <aside id="lyrics-panel" class="w-full md:w-80 bg-[#121212] rounded-lg p-6 flex flex-col justify-between shrink-0 hidden border-l border-[#282828]/50 shadow-2xl transition-all duration-300">
-            <div class="flex items-center justify-between pb-4 border-b border-[#282828]">
-                <h3 class="text-white font-bold text-base flex items-center gap-2">
-                    <svg class="w-5 h-5 text-[#1db954]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-                    Lyrics
-                </h3>
-                <button onclick="toggleLyricsPanel()" class="text-gray-400 hover:text-white transition">
-                    ✕
-                </button>
-            </div>
-            
-            <div id="lyrics-container" class="flex-1 overflow-y-auto my-4 space-y-4 pr-2 text-left font-semibold text-lg md:text-xl text-gray-500">
-                <div class="text-sm text-gray-500 text-center py-10 italic">Select a track to load lyrics</div>
-            </div>
-        </aside>
+    <!-- Search Section -->
+    <div class="p-3 bg-[#121212] border-b border-[#282828]">
+        <div class="flex gap-2">
+            <input 
+                type="text" 
+                id="search-input" 
+                placeholder="What do you want to play?" 
+                class="flex-1 bg-[#242424] text-white text-xs rounded-full px-4 py-2 focus:outline-none focus:ring-1 focus:ring-[#1db954]"
+                onkeydown="if(event.key === 'Enter') addAndPlayTrack()"
+            />
+            <button 
+                id="add-btn"
+                onclick="addAndPlayTrack()" 
+                class="bg-[#1db954] text-black font-bold text-xs px-4 py-2 rounded-full active:scale-95 transition"
+            >
+                Play
+            </button>
+        </div>
+        <div id="error-message" class="text-red-400 text-[11px] hidden font-medium mt-1"></div>
     </div>
 
-    <!-- Bottom Player Bar -->
-    <footer class="h-24 bg-black border-t border-[#282828] px-4 flex items-center justify-between shrink-0">
+    <!-- Main Dynamic Area: Queue or Lyrics View -->
+    <main class="flex-1 relative overflow-hidden bg-[#121212]">
         
-        <!-- Track Details -->
-        <div class="flex items-center gap-3 w-1/3 min-w-[140px]">
-            <img id="track-thumb" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E" class="w-12 h-12 md:w-14 md:h-14 object-cover rounded bg-[#282828] shrink-0" />
-            <div class="overflow-hidden">
-                <h4 id="track-title" class="text-white text-sm font-semibold truncate">Select a track</h4>
-                <p id="track-artist" class="text-xs text-gray-400 truncate">---</p>
+        <!-- Queue View -->
+        <div id="queue-view" class="h-full overflow-y-auto p-3">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-white text-base font-bold">Queue</h2>
+                <span class="text-xs text-gray-400"><span id="queue-count">0</span> tracks</span>
+            </div>
+            <div id="queue-list" class="space-y-1 pb-16"></div>
+        </div>
+
+        <!-- Lyrics View Overlay -->
+        <div id="lyrics-panel" class="absolute inset-0 bg-[#121212] p-4 flex flex-col hidden z-10">
+            <div class="flex items-center justify-between pb-2 border-b border-[#282828]">
+                <h3 class="text-white font-bold text-sm flex items-center gap-2">🎵 Lyrics</h3>
+                <button onclick="toggleLyricsPanel()" class="text-gray-400 hover:text-white text-lg px-2">✕</button>
+            </div>
+            <div id="lyrics-container" class="flex-1 overflow-y-auto my-2 space-y-3 font-semibold text-lg text-gray-500">
+                <div class="text-xs text-gray-500 text-center py-10 italic">Select a track to load lyrics</div>
             </div>
         </div>
 
-        <!-- Custom Audio Controls Center -->
-        <div class="flex flex-col items-center gap-2 w-1/3 max-w-xl">
-            <div class="flex items-center gap-4 md:gap-6">
-                <button onclick="playPreviousTrack()" class="text-gray-400 hover:text-white transition">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-                </button>
-                <button id="master-play-btn" onclick="togglePlayPause()" class="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition">
-                    <svg id="play-icon" class="w-4 h-4 translate-x-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                    <svg id="pause-icon" class="w-4 h-4 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                </button>
-                <button onclick="playNextTrack()" class="text-gray-400 hover:text-white transition">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-                </button>
+    </main>
+
+    <!-- Compact Mobile Bottom Player Footer -->
+    <footer class="bg-black border-t border-[#282828] p-2 flex flex-col gap-2 shrink-0">
+        
+        <!-- Track Details & Main Controls -->
+        <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 overflow-hidden flex-1">
+                <img id="track-thumb" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E" class="w-10 h-10 object-cover rounded bg-[#282828] shrink-0" />
+                <div class="overflow-hidden">
+                    <h4 id="track-title" class="text-white text-xs font-semibold truncate">Select a track</h4>
+                    <p id="track-artist" class="text-[11px] text-gray-400 truncate">---</p>
+                </div>
             </div>
 
-            <!-- Seek Bar Bridge -->
-            <div class="w-full flex items-center gap-2">
-                <span id="current-time" class="text-[11px] text-gray-400 w-8 text-right">0:00</span>
-                <input type="range" id="seek-bar" value="0" min="0" max="100" class="w-full h-1 bg-[#4d4d4d] rounded-lg appearance-none cursor-pointer accent-white hover:accent-[#1db954]" oninput="seekAudio(this.value)" />
-                <span id="total-duration" class="text-[11px] text-gray-400 w-8">0:00</span>
+            <!-- Play Controls -->
+            <div class="flex items-center gap-3 shrink-0">
+                <button onclick="playPreviousTrack()" class="text-gray-400 active:text-white">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </button>
+                <button id="master-play-btn" onclick="togglePlayPause()" class="w-7 h-7 rounded-full bg-white text-black flex items-center justify-center">
+                    <svg id="play-icon" class="w-3.5 h-3.5 translate-x-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg id="pause-icon" class="w-3.5 h-3.5 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                <button onclick="playNextTrack()" class="text-gray-400 active:text-white">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                </button>
+                <button id="lyrics-btn" onclick="toggleLyricsPanel()" class="text-gray-400 active:text-white p-1" title="Toggle Lyrics">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/></svg>
+                </button>
             </div>
         </div>
 
-        <!-- Source Badge & Lyrics Toggle -->
-        <div class="w-1/3 flex justify-end items-center gap-3">
-            <span id="source-indicator" class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-[#282828] text-gray-400 font-bold hidden md:inline-block">
-                Live Stream
-            </span>
-            <button id="lyrics-btn" onclick="toggleLyricsPanel()" class="text-gray-400 hover:text-white transition p-2 rounded-full hover:bg-[#282828]" title="Toggle Lyrics">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/></svg>
-            </button>
+        <!-- Progress Seek Bar -->
+        <div class="flex items-center gap-2 px-1">
+            <span id="current-time" class="text-[10px] text-gray-400 w-6 text-right">0:00</span>
+            <input type="range" id="seek-bar" value="0" min="0" max="100" class="flex-1 h-1 bg-[#4d4d4d] rounded-lg appearance-none cursor-pointer accent-[#1db954]" oninput="seekAudio(this.value)" />
+            <span id="total-duration" class="text-[10px] text-gray-400 w-6">0:00</span>
         </div>
 
         <audio id="audio-player" class="hidden"></audio>
@@ -182,17 +130,13 @@ const seekBar = document.getElementById("seek-bar");
 const playIcon = document.getElementById("play-icon");
 const pauseIcon = document.getElementById("pause-icon");
 
-// --- Audio Controls & Events ---
 audioPlayer.addEventListener("ended", () => playNextTrack());
 
 audioPlayer.addEventListener("timeupdate", () => {
     if (audioPlayer.duration) {
-        const pct = (audioPlayer.currentTime / audioPlayer.duration) * 100;
-        seekBar.value = pct;
+        seekBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
         document.getElementById("current-time").textContent = formatTime(audioPlayer.currentTime);
         document.getElementById("total-duration").textContent = formatTime(audioPlayer.duration);
-        
-        // Sync timestamped lyrics if available
         updateActiveLyric(audioPlayer.currentTime);
     }
 });
@@ -212,17 +156,11 @@ function togglePlayPause() {
         playTrack(0);
         return;
     }
-    if (audioPlayer.paused) {
-        audioPlayer.play().catch(console.error);
-    } else {
-        audioPlayer.pause();
-    }
+    audioPlayer.paused ? audioPlayer.play().catch(console.error) : audioPlayer.pause();
 }
 
 function seekAudio(val) {
-    if (audioPlayer.duration) {
-        audioPlayer.currentTime = (val / 100) * audioPlayer.duration;
-    }
+    if (audioPlayer.duration) audioPlayer.currentTime = (val / 100) * audioPlayer.duration;
 }
 
 function formatTime(secs) {
@@ -240,42 +178,37 @@ function showError(msg) {
     const errContainer = document.getElementById("error-message");
     errContainer.textContent = msg;
     errContainer.classList.remove("hidden");
-    setTimeout(() => {
-        errContainer.classList.add("hidden");
-    }, 4000);
+    setTimeout(() => errContainer.classList.add("hidden"), 4000);
 }
 
-// --- Engine Status Monitor ---
 async function checkInstallStatus() {
     const dot = document.getElementById("status-dot");
     const label = document.getElementById("status-text");
 
     try {
         const response = await fetch(`/runner/api/${APP_NAME}/get_install_status`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
+        if (!response.ok) throw new Error();
         const res = await response.json();
         const data = res.data || res;
 
         if (data.is_installed) {
             dot.className = "w-2 h-2 rounded-full bg-[#1db954]";
-            label.textContent = "Engine Ready";
+            label.textContent = "Ready";
         } else if (data.is_installing) {
             dot.className = "w-2 h-2 rounded-full bg-yellow-400 animate-ping";
-            label.textContent = data.message || "Installing dependencies...";
+            label.textContent = "Installing...";
         } else {
             dot.className = "w-2 h-2 rounded-full bg-red-500";
-            label.textContent = data.message || "Engine Error";
+            label.textContent = "Engine Error";
         }
     } catch (e) {
         dot.className = "w-2 h-2 rounded-full bg-red-500";
-        label.textContent = "Backend Disconnected";
+        label.textContent = "Disconnected";
     }
 }
 setInterval(checkInstallStatus, 3000);
 checkInstallStatus();
 
-// --- Add & Stream Track (Ultra Fast) ---
 async function addAndPlayTrack() {
     const input = document.getElementById("search-input");
     const query = input.value.trim();
@@ -288,101 +221,78 @@ async function addAndPlayTrack() {
 
     try {
         const response = await fetch(`/runner/api/${APP_NAME}/stream_and_trigger_download?query=${encodeURIComponent(query)}`);
-        
-        if (!response.ok) {
-            showError(`Server error (${response.status})`);
-            return;
-        }
+        if (!response.ok) return showError(`Server error (${response.status})`);
 
         const res = await response.json();
         const data = res.data || res;
 
         if (data.success) {
-            const trackObj = {
-                query: query,
-                id: data.id,
-                title: data.title,
-                artist: data.artist,
-                thumbnail: data.thumbnail,
-                stream_url: data.stream_url,
+            playlist.push({
+                query, id: data.id, title: data.title, artist: data.artist,
+                thumbnail: data.thumbnail, stream_url: data.stream_url,
                 from_cache: data.from_cache || false
-            };
-
-            playlist.push(trackObj);
+            });
             input.value = "";
             savePlaylist();
 
-            const trackIndex = playlist.length - 1;
-
-            if (currentTrackIndex === -1) {
-                playTrack(trackIndex);
-            }
+            if (currentTrackIndex === -1) playTrack(playlist.length - 1);
         } else {
-            showError(res.error || data.error || "Track not found or streaming restricted.");
+            showError(res.error || data.error || "Track not found.");
         }
     } catch (e) {
-        showError("Failed to connect to backend server.");
+        showError("Backend offline.");
     } finally {
         btn.disabled = false;
         btn.classList.remove("opacity-50");
     }
 }
 
-// --- Queue Renderer ---
 function renderQueue() {
     const list = document.getElementById("queue-list");
     document.getElementById("queue-count").textContent = playlist.length;
     list.innerHTML = "";
 
     if (playlist.length === 0) {
-        list.innerHTML = '<div class="text-xs text-gray-500 text-center py-8">No tracks in queue. Search above to begin.</div>';
+        list.innerHTML = '<div class="text-xs text-gray-500 text-center py-8">Queue empty. Search to play.</div>';
         return;
     }
 
     playlist.forEach((track, idx) => {
         const isCurrent = idx === currentTrackIndex;
         const item = document.createElement("div");
-        item.className = `group grid grid-cols-[16px_1fr_auto_auto] gap-4 items-center px-4 py-3 rounded-md text-sm transition-colors cursor-pointer ${
-            isCurrent ? 'bg-[#282828] text-[#1db954]' : 'hover:bg-[#1a1a1a] text-gray-300'
+        item.className = `flex items-center justify-between p-2 rounded-md text-xs ${
+            isCurrent ? 'bg-[#282828] text-[#1db954]' : 'bg-[#181818] text-gray-300'
         }`;
         
-        let statusBadge = `<span class="text-[11px] text-[#1db954] font-semibold">${track.from_cache ? '⚡ Fast Cached' : '🌐 Live'}</span>`;
-
         item.innerHTML = `
-            <span class="text-xs font-mono text-gray-500 group-hover:text-white">${idx + 1}</span>
-            <div class="flex items-center gap-3 overflow-hidden" onclick="playTrack(${idx})">
-                <img src="${track.thumbnail}" class="w-10 h-10 object-cover rounded bg-[#282828] shrink-0" />
-                <div class="truncate">
-                    <div class="font-semibold truncate text-white ${isCurrent ? 'text-[#1db954]' : ''}">${track.title}</div>
-                    <div class="text-xs text-gray-400 truncate">${track.artist}</div>
+            <div class="flex items-center gap-2 overflow-hidden flex-1" onclick="playTrack(${idx})">
+                <span class="text-[10px] font-mono text-gray-500 w-4">${idx + 1}</span>
+                <img src="${track.thumbnail}" class="w-8 h-8 object-cover rounded bg-[#282828] shrink-0" />
+                <div class="truncate flex-1">
+                    <div class="font-semibold truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}">${track.title}</div>
+                    <div class="text-[10px] text-gray-400 truncate">${track.artist}</div>
                 </div>
             </div>
-            <div class="text-right">${statusBadge}</div>
-            <button onclick="event.stopPropagation(); deleteTrack(${idx})" class="text-gray-400 hover:text-white transition px-1">
-                ✕
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+                <span class="text-[9px] text-[#1db954]">${track.from_cache ? '⚡' : '🌐'}</span>
+                <button onclick="event.stopPropagation(); deleteTrack(${idx})" class="text-gray-400 hover:text-white px-1">✕</button>
+            </div>
         `;
         list.appendChild(item);
     });
 }
 
-// --- Audio Player Controller ---
 async function playTrack(index) {
     if (index < 0 || index >= playlist.length) return;
 
     currentTrackIndex = index;
     const track = playlist[index];
-    const sourceIndicator = document.getElementById("source-indicator");
 
     document.getElementById("track-title").textContent = track.title;
     document.getElementById("track-artist").textContent = track.artist;
     document.getElementById("track-thumb").src = track.thumbnail;
 
-    if (track.stream_url) {
-        audioPlayer.src = track.stream_url;
-        sourceIndicator.textContent = track.from_cache ? "Instant Cache Stream" : "Live Stream";
-        sourceIndicator.classList.remove("hidden");
-    }
+    if (track.stream_url) audioPlayer.src = track.stream_url;
 
     audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
     renderQueue();
@@ -390,15 +300,11 @@ async function playTrack(index) {
 }
 
 function playNextTrack() {
-    if (currentTrackIndex + 1 < playlist.length) {
-        playTrack(currentTrackIndex + 1);
-    }
+    if (currentTrackIndex + 1 < playlist.length) playTrack(currentTrackIndex + 1);
 }
 
 function playPreviousTrack() {
-    if (currentTrackIndex > 0) {
-        playTrack(currentTrackIndex - 1);
-    }
+    if (currentTrackIndex > 0) playTrack(currentTrackIndex - 1);
 }
 
 function deleteTrack(index) {
@@ -417,7 +323,6 @@ function deleteTrack(index) {
             document.getElementById("track-title").textContent = "Select a track";
             document.getElementById("track-artist").textContent = "---";
             document.getElementById("track-thumb").src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E";
-            document.getElementById("source-indicator").classList.add("hidden");
             resetLyricsDisplay();
         }
     } else if (currentTrackIndex > index) {
@@ -429,28 +334,20 @@ function deleteTrack(index) {
 async function clearServerCache() {
     try {
         await fetch(`/runner/api/${APP_NAME}/clear_cache`);
-        showError("Server track cache cleared.");
-    } catch (e) {
-        console.error("Clear cache error", e);
-    }
+        showError("Cache cleared.");
+    } catch (e) {}
 }
 
-// --- Lyrics Controller ---
 function toggleLyricsPanel() {
     const panel = document.getElementById("lyrics-panel");
     const btn = document.getElementById("lyrics-btn");
-    
     panel.classList.toggle("hidden");
-    if (!panel.classList.contains("hidden")) {
-        btn.classList.add("text-[#1db954]");
-    } else {
-        btn.classList.remove("text-[#1db954]");
-    }
+    btn.classList.toggle("text-[#1db954]", !panel.classList.contains("hidden"));
 }
 
 async function fetchLyricsForTrack(query) {
     const container = document.getElementById("lyrics-container");
-    container.innerHTML = '<div class="text-sm text-gray-400 text-center py-10 flex justify-center items-center gap-2"><span class="animate-spin">⏳</span> Searching lyrics...</div>';
+    container.innerHTML = '<div class="text-xs text-gray-400 text-center py-6">Loading lyrics...</div>';
     currentLyricsData = null;
     activeLyricIndex = -1;
 
@@ -463,10 +360,10 @@ async function fetchLyricsForTrack(query) {
             currentLyricsData = data;
             renderLyrics(data);
         } else {
-            container.innerHTML = `<div class="text-sm text-gray-500 text-center py-10">${data.message || 'No lyrics available.'}</div>`;
+            container.innerHTML = `<div class="text-xs text-gray-500 text-center py-6">${data.message || 'No lyrics found.'}</div>`;
         }
     } catch (e) {
-        container.innerHTML = '<div class="text-sm text-red-400 text-center py-10">Failed to fetch lyrics.</div>';
+        container.innerHTML = '<div class="text-xs text-red-400 text-center py-6">Lyrics unavailable.</div>';
     }
 }
 
@@ -474,22 +371,20 @@ function renderLyrics(lyricsObj) {
     const container = document.getElementById("lyrics-container");
     container.innerHTML = "";
 
-    if (lyricsObj.is_synced && lyricsObj.parsed && lyricsObj.parsed.length > 0) {
+    if (lyricsObj.is_synced && lyricsObj.parsed?.length) {
         lyricsObj.parsed.forEach((line, index) => {
             const p = document.createElement("p");
             p.id = `lyric-line-${index}`;
-            p.className = "lyric-line hover:text-white cursor-pointer py-1 transition-all";
+            p.className = "lyric-line py-1 cursor-pointer";
             p.textContent = line.text;
-            p.onclick = () => {
-                audioPlayer.currentTime = line.time;
-            };
+            p.onclick = () => audioPlayer.currentTime = line.time;
             container.appendChild(p);
         });
     } else if (lyricsObj.raw) {
         lyricsObj.raw.split("\n").forEach(line => {
             if (line.trim()) {
                 const p = document.createElement("p");
-                p.className = "text-gray-300 py-1 text-base";
+                p.className = "text-gray-300 py-0.5 text-sm";
                 p.textContent = line;
                 container.appendChild(p);
             }
@@ -498,25 +393,20 @@ function renderLyrics(lyricsObj) {
 }
 
 function updateActiveLyric(currentTime) {
-    if (!currentLyricsData || !currentLyricsData.is_synced || !currentLyricsData.parsed || !currentLyricsData.parsed.length) return;
+    if (!currentLyricsData?.is_synced || !currentLyricsData?.parsed?.length) return;
 
     const parsed = currentLyricsData.parsed;
     let newIndex = -1;
 
     for (let i = 0; i < parsed.length; i++) {
-        if (currentTime >= parsed[i].time) {
-            newIndex = i;
-        } else {
-            break;
-        }
+        if (currentTime >= parsed[i].time) newIndex = i;
+        else break;
     }
 
     if (newIndex !== activeLyricIndex && newIndex !== -1) {
         if (activeLyricIndex !== -1) {
-            const prevEl = document.getElementById(`lyric-line-${activeLyricIndex}`);
-            if (prevEl) prevEl.classList.remove("lyric-active");
+            document.getElementById(`lyric-line-${activeLyricIndex}`)?.classList.remove("lyric-active");
         }
-        
         const newEl = document.getElementById(`lyric-line-${newIndex}`);
         if (newEl) {
             newEl.classList.add("lyric-active");
@@ -529,7 +419,7 @@ function updateActiveLyric(currentTime) {
 function resetLyricsDisplay() {
     currentLyricsData = null;
     activeLyricIndex = -1;
-    document.getElementById("lyrics-container").innerHTML = '<div class="text-sm text-gray-500 text-center py-10 italic">Select a track to load lyrics</div>';
+    document.getElementById("lyrics-container").innerHTML = '<div class="text-xs text-gray-500 text-center py-6">Select a track for lyrics</div>';
 }
 
 renderQueue();

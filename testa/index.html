@@ -25,6 +25,7 @@
         <div class="flex items-center gap-2 text-xs">
             <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
             <span id="status-text" class="text-gray-400 font-medium truncate max-w-[120px]">Checking...</span>
+            <button onclick="loadCachedTracksToQueue()" class="p-1 text-gray-400 hover:text-white" title="Import Cached Tracks">📂</button>
             <button onclick="clearServerCache()" class="p-1 text-gray-400 hover:text-white" title="Clear Cache">🗑️</button>
         </div>
     </header>
@@ -50,16 +51,30 @@
         <div id="error-message" class="text-red-400 text-[11px] hidden font-medium mt-1"></div>
     </div>
 
-    <!-- Main Dynamic Area: Queue or Lyrics View -->
+    <!-- Main Dynamic Area: Queue, Recommendations, or Lyrics View -->
     <main class="flex-1 relative overflow-hidden bg-[#121212]">
         
-        <!-- Queue View -->
-        <div id="queue-view" class="h-full overflow-y-auto p-3">
-            <div class="flex justify-between items-center mb-2">
-                <h2 class="text-white text-base font-bold">Queue</h2>
-                <span class="text-xs text-gray-400"><span id="queue-count">0</span> tracks</span>
+        <!-- Queue & Recommendations View -->
+        <div id="queue-view" class="h-full overflow-y-auto p-3 space-y-4">
+            <!-- Queue Section -->
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-white text-base font-bold">Queue</h2>
+                    <span class="text-xs text-gray-400"><span id="queue-count">0</span> tracks</span>
+                </div>
+                <div id="queue-list" class="space-y-1"></div>
             </div>
-            <div id="queue-list" class="space-y-1 pb-16"></div>
+
+            <!-- Recommendations Section -->
+            <div id="recommendations-section" class="hidden">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-white text-sm font-bold flex items-center gap-1">
+                        <span>✨ Recommended Songs</span>
+                        <span id="rec-loading" class="hidden text-xs text-gray-400 font-normal">(Fetching...)</span>
+                    </h3>
+                </div>
+                <div id="recommendations-list" class="space-y-1 pb-16"></div>
+            </div>
         </div>
 
         <!-- Lyrics View Overlay -->
@@ -121,6 +136,7 @@ const APP_NAME = "testa";
 const STORAGE_KEY = "fast_livestream_playlist_vault";
 
 let playlist = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+let recommendations = [];
 let currentTrackIndex = -1;
 let currentLyricsData = null;
 let activeLyricIndex = -1;
@@ -181,6 +197,7 @@ function showError(msg) {
     setTimeout(() => errContainer.classList.add("hidden"), 4000);
 }
 
+/* --- Engine Status Monitoring --- */
 async function checkInstallStatus() {
     const dot = document.getElementById("status-dot");
     const label = document.getElementById("status-text");
@@ -209,6 +226,7 @@ async function checkInstallStatus() {
 setInterval(checkInstallStatus, 3000);
 checkInstallStatus();
 
+/* --- Track Search & Playback --- */
 async function addAndPlayTrack() {
     const input = document.getElementById("search-input");
     const query = input.value.trim();
@@ -247,6 +265,7 @@ async function addAndPlayTrack() {
     }
 }
 
+/* --- Queue UI Rendering --- */
 function renderQueue() {
     const list = document.getElementById("queue-list");
     document.getElementById("queue-count").textContent = playlist.length;
@@ -265,7 +284,7 @@ function renderQueue() {
         }`;
         
         item.innerHTML = `
-            <div class="flex items-center gap-2 overflow-hidden flex-1" onclick="playTrack(${idx})">
+            <div class="flex items-center gap-2 overflow-hidden flex-1 cursor-pointer" onclick="playTrack(${idx})">
                 <span class="text-[10px] font-mono text-gray-500 w-4">${idx + 1}</span>
                 <img src="${track.thumbnail}" class="w-8 h-8 object-cover rounded bg-[#282828] shrink-0" />
                 <div class="truncate flex-1">
@@ -274,7 +293,7 @@ function renderQueue() {
                 </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-                <span class="text-[9px] text-[#1db954]">${track.from_cache ? '⚡' : '🌐'}</span>
+                <span class="text-[9px] text-[#1db954]" title="${track.from_cache ? 'From Cache' : 'Fetched Online'}">${track.from_cache ? '⚡' : '🌐'}</span>
                 <button onclick="event.stopPropagation(); deleteTrack(${idx})" class="text-gray-400 hover:text-white px-1">✕</button>
             </div>
         `;
@@ -282,6 +301,7 @@ function renderQueue() {
     });
 }
 
+/* --- Track Execution & Recommendation Triggering --- */
 async function playTrack(index) {
     if (index < 0 || index >= playlist.length) return;
 
@@ -297,10 +317,16 @@ async function playTrack(index) {
     audioPlayer.play().catch(e => console.warn("Autoplay blocked:", e));
     renderQueue();
     fetchLyricsForTrack(`${track.title} ${track.artist}`);
+    fetchRecommendations(track.id, track.title);
 }
 
 function playNextTrack() {
-    if (currentTrackIndex + 1 < playlist.length) playTrack(currentTrackIndex + 1);
+    if (currentTrackIndex + 1 < playlist.length) {
+        playTrack(currentTrackIndex + 1);
+    } else if (recommendations.length > 0) {
+        // Autoplay next track from recommendations if queue ends
+        addRecommendationToQueue(0);
+    }
 }
 
 function playPreviousTrack() {
@@ -324,6 +350,7 @@ function deleteTrack(index) {
             document.getElementById("track-artist").textContent = "---";
             document.getElementById("track-thumb").src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E";
             resetLyricsDisplay();
+            document.getElementById("recommendations-section").classList.add("hidden");
         }
     } else if (currentTrackIndex > index) {
         currentTrackIndex--;
@@ -331,13 +358,118 @@ function deleteTrack(index) {
     savePlaylist();
 }
 
+/* --- Cache Control Helpers --- */
 async function clearServerCache() {
     try {
-        await fetch(`/runner/api/${APP_NAME}/clear_cache`);
-        showError("Cache cleared.");
-    } catch (e) {}
+        const res = await fetch(`/runner/api/${APP_NAME}/clear_cache`);
+        const json = await res.json();
+        const data = json.data || json;
+        showError(data.message || "Cache cleared.");
+    } catch (e) {
+        showError("Failed to clear server cache.");
+    }
 }
 
+async function loadCachedTracksToQueue() {
+    try {
+        const res = await fetch(`/runner/api/${APP_NAME}/get_cached_tracks`);
+        const json = await res.json();
+        const data = json.data || json;
+
+        if (data.success && data.tracks?.length > 0) {
+            let addedCount = 0;
+            data.tracks.forEach(t => {
+                if (!playlist.some(p => p.id === t.id)) {
+                    playlist.push({
+                        query: t.title, id: t.id, title: t.title, artist: t.artist,
+                        thumbnail: t.thumbnail, stream_url: t.stream_url,
+                        from_cache: true
+                    });
+                    addedCount++;
+                }
+            });
+            savePlaylist();
+            showError(`Added ${addedCount} cached tracks to queue.`);
+        } else {
+            showError("No cached tracks found.");
+        }
+    } catch (e) {
+        showError("Failed to retrieve cached tracks.");
+    }
+}
+
+/* --- Recommendation Logic --- */
+async function fetchRecommendations(trackId, title) {
+    const section = document.getElementById("recommendations-section");
+    const loader = document.getElementById("rec-loading");
+    section.classList.remove("hidden");
+    loader.classList.remove("hidden");
+
+    try {
+        const url = `/runner/api/${APP_NAME}/get_recommendations?id=${encodeURIComponent(trackId || '')}&query=${encodeURIComponent(title || '')}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        const data = json.data || json;
+
+        if (data.success && data.recommendations) {
+            recommendations = data.recommendations;
+            renderRecommendations();
+        } else {
+            recommendations = [];
+            renderRecommendations();
+        }
+    } catch (e) {
+        console.error("Recommendations fetch failed:", e);
+    } finally {
+        loader.classList.add("hidden");
+    }
+}
+
+function renderRecommendations() {
+    const list = document.getElementById("recommendations-list");
+    list.innerHTML = "";
+
+    if (recommendations.length === 0) {
+        list.innerHTML = '<div class="text-xs text-gray-500 text-center py-2">No recommendations available.</div>';
+        return;
+    }
+
+    recommendations.forEach((rec, idx) => {
+        const item = document.createElement("div");
+        item.className = "flex items-center justify-between p-2 rounded-md text-xs bg-[#181818] text-gray-300 hover:bg-[#242424]";
+        item.innerHTML = `
+            <div class="flex items-center gap-2 overflow-hidden flex-1 cursor-pointer" onclick="addRecommendationToQueue(${idx})">
+                <img src="${rec.thumbnail}" class="w-8 h-8 object-cover rounded bg-[#282828] shrink-0" />
+                <div class="truncate flex-1">
+                    <div class="font-semibold text-white truncate">${rec.title}</div>
+                    <div class="text-[10px] text-gray-400 truncate">${rec.artist}</div>
+                </div>
+            </div>
+            <button onclick="addRecommendationToQueue(${idx})" class="text-[#1db954] text-xs font-bold px-2 py-1 rounded bg-[#282828] hover:bg-[#333]">
+                + Add
+            </button>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function addRecommendationToQueue(index) {
+    const rec = recommendations[index];
+    if (!rec) return;
+
+    playlist.push({
+        query: rec.title, id: rec.id, title: rec.title, artist: rec.artist,
+        thumbnail: rec.thumbnail, stream_url: rec.stream_url,
+        from_cache: rec.from_cache || false
+    });
+    savePlaylist();
+
+    if (currentTrackIndex === -1) {
+        playTrack(playlist.length - 1);
+    }
+}
+
+/* --- Lyrics Logic --- */
 function toggleLyricsPanel() {
     const panel = document.getElementById("lyrics-panel");
     const btn = document.getElementById("lyrics-btn");

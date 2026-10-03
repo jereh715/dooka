@@ -8,7 +8,9 @@ import importlib
 import json
 import re
 
+# ---------------------------------------------------------
 # 1. Safe Dynamic Import for Chaquopy / Standalone Execution
+# ---------------------------------------------------------
 APP_FILES_DIR = None
 
 try:
@@ -19,9 +21,12 @@ try:
 except (ImportError, ModuleNotFoundError, AttributeError, Exception):
     APP_FILES_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 2. Configure Storage Paths
+# ---------------------------------------------------------
+# 2. Configure Storage Paths & Locks
+# ---------------------------------------------------------
 LOCAL_LIB_DIR = os.path.join(APP_FILES_DIR, "libs")
 CACHE_FILE = os.path.join(APP_FILES_DIR, "track_cache.json")
+CACHE_LOCK = threading.Lock()
 
 os.makedirs(LOCAL_LIB_DIR, exist_ok=True)
 
@@ -35,7 +40,9 @@ INSTALLATION_STATUS = {
     "error": None
 }
 
+# ---------------------------------------------------------
 # 3. Dynamic Package Management for yt-dlp
+# ---------------------------------------------------------
 def install_ytdlp_background():
     global INSTALLATION_STATUS
     INSTALLATION_STATUS["is_installing"] = True
@@ -112,24 +119,30 @@ def get_install_status(params=None):
         "error": INSTALLATION_STATUS.get("error")
     }
 
-# 4. Local Track Details Cache Helpers
+# ---------------------------------------------------------
+# 4. Thread-Safe Cache Helpers
+# ---------------------------------------------------------
 def _load_cache():
     if os.path.exists(CACHE_FILE):
         try:
-            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            with CACHE_LOCK:
+                with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
         except Exception:
             return {}
     return {}
 
 def _save_cache(cache_data):
     try:
-        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(cache_data, f, ensure_ascii=False, indent=2)
+        with CACHE_LOCK:
+            with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[CACHE WRITE ERROR]: {e}")
 
+# ---------------------------------------------------------
 # 5. Fast Audio Streaming & Caching
+# ---------------------------------------------------------
 def stream_and_trigger_download(params=None):
     if not params or not params.get("query"):
         return {"success": False, "error": "No query provided."}
@@ -137,8 +150,8 @@ def stream_and_trigger_download(params=None):
     query = params.get("query").strip().lower()
     cache = _load_cache()
 
-    # 1. Fast path: return cached track metadata directly
-    if query in cache:
+    # Fast path: return cached track metadata directly
+    if query in cache and cache[query].get("stream_url"):
         cached_item = cache[query]
         cached_item["from_cache"] = True
         return cached_item
@@ -157,13 +170,13 @@ def stream_and_trigger_download(params=None):
         'nocheckcertificate': True,
         'skip_download': True,
         'extract_flat': False,
-        'socket_timeout': 5,
-        'source_address': '0.0.0.0',
+        'socket_timeout': 8,
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"ytsearch1:{query}", download=False)
+            target = query if (query.startswith("http") or len(query) == 11) else f"ytsearch1:{query}"
+            info = ydl.extract_info(target, download=False)
             video = info['entries'][0] if 'entries' in info and info['entries'] else info
 
             video_id = video.get('id')
@@ -172,12 +185,18 @@ def stream_and_trigger_download(params=None):
             if not stream_url:
                 return {"success": False, "error": "No stream URL extracted."}
 
+            title = video.get('title', 'Unknown Title')
+            artist = video.get('uploader') or video.get('channel') or 'Unknown Artist'
+            
+            thumbnails = video.get('thumbnails', [])
+            thumbnail_url = video.get('thumbnail') or (thumbnails[-1].get('url') if thumbnails else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
+
             result = {
                 "success": True,
                 "id": video_id,
-                "title": video.get('title', 'Unknown Title'),
-                "artist": video.get('uploader', 'Unknown Artist'),
-                "thumbnail": video.get('thumbnail', ''),
+                "title": title,
+                "artist": artist,
+                "thumbnail": thumbnail_url,
                 "stream_url": stream_url,
                 "duration": video.get('duration', 0),
                 "from_cache": False
@@ -193,9 +212,14 @@ def stream_and_trigger_download(params=None):
     except Exception as e:
         return {"success": False, "error": f"Extraction error: {str(e)}"}
 
-# 6. Recommendation Logic (Autoplay / Shuffle Related Songs)
+# ---------------------------------------------------------
+# 6. Fixed Recommendation Engine (Fast Flat Extraction)
+# ---------------------------------------------------------
 def get_recommendations(params=None):
-    """Find related songs using yt-dlp based on a track ID or search query."""
+    """
+    Finds related tracks instantly using flat search extraction.
+    Returns metadata immediately and leaves stream_url as None to avoid network timeouts.
+    """
     if not params or not (params.get("id") or params.get("query")):
         return {"success": False, "error": "Track ID or Query required."}
 
@@ -208,7 +232,15 @@ def get_recommendations(params=None):
     import yt_dlp
 
     cache = _load_cache()
-    search_target = f"https://www.youtube.com/watch?v={track_id}" if track_id else f"ytsearch5:{query} music"
+
+    # Build smart search target based on track metadata or query
+    if query:
+        search_target = f"ytsearch6:{query} music"
+    elif track_id and track_id in cache:
+        t_info = cache[track_id]
+        search_target = f"ytsearch6:{t_info.get('title', '')} {t_info.get('artist', '')} music"
+    else:
+        search_target = f"ytsearch6:{track_id} music"
 
     ydl_opts = {
         'format': 'ba[ext=m4a]/ba[ext=webm]/ba/worst',
@@ -217,52 +249,49 @@ def get_recommendations(params=None):
         'no_warnings': True,
         'nocheckcertificate': True,
         'skip_download': True,
-        'extract_flat': False,
-        'socket_timeout': 5,
+        'extract_flat': 'in_playlist',  # Instant metadata fetch without downloading full video info
+        'socket_timeout': 6,
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(search_target, download=False)
-            
-            # Extract related entries or search results
-            entries = []
-            if 'related_videos' in info and info['related_videos']:
-                entries = info['related_videos'][:5]
-            elif 'entries' in info:
-                entries = info['entries'][1:6]  # Skip index 0 if it's the current query match
+            entries = info.get('entries', []) if info else []
 
             recommendations = []
             for entry in entries:
                 vid_id = entry.get('id')
-                if not vid_id:
+
+                if not vid_id or vid_id == track_id:
                     continue
 
-                # If already in local cache, use cached details
+                # Return cached track directly if available
                 if vid_id in cache:
                     recommendations.append(cache[vid_id])
                     continue
 
-                # Fast extract stream info for recommended song
-                try:
-                    rec_info = ydl.extract_info(f"https://www.youtube.com/watch?v={vid_id}", download=False)
-                    rec_result = {
-                        "success": True,
-                        "id": vid_id,
-                        "title": rec_info.get('title', 'Unknown Title'),
-                        "artist": rec_info.get('uploader', 'Unknown Artist'),
-                        "thumbnail": rec_info.get('thumbnail', ''),
-                        "stream_url": rec_info.get('url', ''),
-                        "duration": rec_info.get('duration', 0),
-                        "from_cache": False
-                    }
-                    if rec_result["stream_url"]:
-                        cache[vid_id] = rec_result
-                        recommendations.append(rec_result)
-                except Exception:
-                    continue
+                title = entry.get('title') or 'Unknown Title'
+                artist = entry.get('uploader') or entry.get('channel') or 'Unknown Artist'
 
-            _save_cache(cache)
+                thumbnails = entry.get('thumbnails', [])
+                thumbnail_url = thumbnails[-1].get('url') if thumbnails else f"https://i.ytimg.com/vi/{vid_id}/hqdefault.jpg"
+
+                rec_result = {
+                    "success": True,
+                    "id": vid_id,
+                    "title": title,
+                    "artist": artist,
+                    "thumbnail": thumbnail_url,
+                    "stream_url": None,  # Resolved on-demand when clicked via stream_and_trigger_download
+                    "duration": entry.get('duration', 0),
+                    "from_cache": False
+                }
+
+                recommendations.append(rec_result)
+
+                if len(recommendations) >= 5:
+                    break
+
             return {"success": True, "recommendations": recommendations}
 
     except Exception as e:
@@ -281,13 +310,16 @@ def clear_cache(params=None):
     """Clear local cached track details."""
     if os.path.exists(CACHE_FILE):
         try:
-            os.remove(CACHE_FILE)
+            with CACHE_LOCK:
+                os.remove(CACHE_FILE)
             return {"success": True, "message": "Cache cleared successfully."}
         except Exception as e:
             return {"success": False, "error": str(e)}
     return {"success": True, "message": "Cache was already empty."}
 
+# ---------------------------------------------------------
 # 7. Lyrics Parsing and Fetching
+# ---------------------------------------------------------
 def parse_lrc(lrc_text):
     if not lrc_text:
         return []

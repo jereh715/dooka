@@ -9,20 +9,168 @@ import json
 import re
 
 # ---------------------------------------------------------
-# 1. Safe Dynamic Import for Chaquopy / Standalone Execution
+# 1. Chaquopy Native Android Imports & Global Context
 # ---------------------------------------------------------
 APP_FILES_DIR = None
+ANDROID_CONTEXT = None
+MEDIA_NOTIF_MANAGER = None
 
 try:
     chaquopy_mod = importlib.import_module("com.chaquopy.python")
     Python = getattr(chaquopy_mod, "Python")
-    context = Python.getPlatform().getApplication()
-    APP_FILES_DIR = str(context.getFilesDir().getAbsolutePath())
+    ANDROID_CONTEXT = Python.getPlatform().getApplication()
+    APP_FILES_DIR = str(ANDROID_CONTEXT.getFilesDir().getAbsolutePath())
 except (ImportError, ModuleNotFoundError, AttributeError, Exception):
     APP_FILES_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ---------------------------------------------------------
-# 2. Configure Storage Paths & Locks
+# 2. Pure-Python Android Media Notification Engine
+# ---------------------------------------------------------
+class PurePythonMediaNotification:
+    """
+    Directly invokes Android's Java NotificationManager, MediaSession,
+    and MediaMetadata APIs via Chaquopy without native Java source files.
+    """
+    def __init__(self, context):
+        self.context = context
+        self.channel_id = "chaquopy_media_channel"
+        self.notif_id = 1001
+        self.session = None
+        self.notification_manager = None
+        
+        if self.context:
+            try:
+                # Import Android Java Classes dynamically via Chaquopy
+                from android.app import NotificationManager, NotificationChannel
+                from android.os import Build
+                from android.media.session import MediaSession, PlaybackState
+                from android.media import MediaMetadata
+
+                self.NotificationManagerClass = NotificationManager
+                self.NotificationChannelClass = NotificationChannel
+                self.MediaSessionClass = MediaSession
+                self.PlaybackStateClass = PlaybackState
+                self.MediaMetadataClass = MediaMetadata
+                self.BuildClass = Build
+
+                self.notification_manager = self.context.getSystemService(Context.NOTIFICATION_SERVICE)
+                
+                # Create Media Session
+                self.session = self.MediaSessionClass(self.context, "ChaquopyAudioSession")
+                self.session.setActive(True)
+
+                self._create_channel()
+            except Exception as e:
+                print(f"[ANDROID NOTIF INIT ERROR]: {e}")
+
+    def _create_channel(self):
+        try:
+            if self.BuildClass.VERSION.SDK_INT >= 26:  # Android 8.0 OREO
+                channel = self.NotificationChannelClass(
+                    self.channel_id,
+                    "Audio Playback Controls",
+                    self.NotificationManagerClass.IMPORTANCE_LOW
+                )
+                channel.setDescription("Shows active track, artwork, and progression")
+                self.notification_manager.createNotificationChannel(channel)
+        except Exception as e:
+            print(f"[CHANNEL CREATION ERROR]: {e}")
+
+    def update_notification(self, title, artist, thumbnail_url, duration_sec, is_playing=True, position_sec=0):
+        if not self.context or not self.notification_manager:
+            return
+
+        def _bg_post():
+            try:
+                from android.graphics import BitmapFactory
+                from androidx.core.app import NotificationCompat
+                from android.media import MediaMetadata
+                from android.media.session import PlaybackState
+
+                # Fetch bitmap artwork from thumbnail URL
+                album_art = None
+                if thumbnail_url:
+                    try:
+                        req = urllib.request.Request(thumbnail_url, headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(req, timeout=5) as resp:
+                            img_bytes = resp.read()
+                            album_art = BitmapFactory.decodeByteArray(img_bytes, 0, len(img_bytes))
+                    except Exception as ie:
+                        print(f"[ARTWORK FETCH ERROR]: {ie}")
+
+                # Update Media Metadata
+                meta_builder = self.MediaMetadataClass.Builder()
+                meta_builder.putString(self.MediaMetadataClass.METADATA_KEY_TITLE, title)
+                meta_builder.putString(self.MediaMetadataClass.METADATA_KEY_ARTIST, artist)
+                meta_builder.putLong(self.MediaMetadataClass.METADATA_KEY_DURATION, int(duration_sec * 1000))
+                
+                if album_art:
+                    meta_builder.putBitmap(self.MediaMetadataClass.METADATA_KEY_ALBUM_ART, album_art)
+                
+                self.session.setMetadata(meta_builder.build())
+
+                # Update Playback State & Progress Bar
+                state_code = self.PlaybackStateClass.STATE_PLAYING if is_playing else self.PlaybackStateClass.STATE_PAUSED
+                state_builder = self.PlaybackStateClass.Builder()
+                state_builder.setState(state_code, int(position_sec * 1000), 1.0)
+                state_builder.setActions(
+                    self.PlaybackStateClass.ACTION_PLAY | 
+                    self.PlaybackStateClass.ACTION_PAUSE | 
+                    self.PlaybackStateClass.ACTION_SEEK_TO
+                )
+                self.session.setPlaybackState(state_builder.build())
+
+                # Construct Android Notification
+                builder = NotificationCompat.Builder(self.context, self.channel_id)
+                builder.setContentTitle(title)
+                builder.setContentText(artist)
+                builder.setSmallIcon(17301540)  # android.R.drawable.ic_media_play
+                
+                if album_art:
+                    builder.setLargeIcon(album_art)
+
+                # Bind MediaSession Token to Notification Style
+                style = NotificationCompat.MediaStyle()
+                style.setMediaSession(self.session.getSessionToken())
+                builder.setStyle(style)
+                
+                builder.setOngoing(is_playing)
+                builder.setOnlyAlertOnce(True)
+
+                self.notification_manager.notify(self.notif_id, builder.build())
+            except Exception as ex:
+                print(f"[NOTIFICATION POST ERROR]: {ex}")
+
+        threading.Thread(target=_bg_post, daemon=True).start()
+
+    def update_progress(self, position_sec, is_playing=True):
+        if not self.context or not self.session:
+            return
+        try:
+            state_code = self.PlaybackStateClass.STATE_PLAYING if is_playing else self.PlaybackStateClass.STATE_PAUSED
+            state_builder = self.PlaybackStateClass.Builder()
+            state_builder.setState(state_code, int(position_sec * 1000), 1.0)
+            state_builder.setActions(
+                self.PlaybackStateClass.ACTION_PLAY | 
+                self.PlaybackStateClass.ACTION_PAUSE | 
+                self.PlaybackStateClass.ACTION_SEEK_TO
+            )
+            self.session.setPlaybackState(state_builder.build())
+        except Exception as e:
+            print(f"[PROGRESS UPDATE ERROR]: {e}")
+
+    def dismiss(self):
+        if self.notification_manager:
+            try:
+                self.notification_manager.cancel(self.notif_id)
+            except Exception as e:
+                print(f"[DISMISS ERROR]: {e}")
+
+if ANDROID_CONTEXT:
+    MEDIA_NOTIF_MANAGER = PurePythonMediaNotification(ANDROID_CONTEXT)
+
+# ---------------------------------------------------------
+# 3. Storage Paths & Thread Locks
 # ---------------------------------------------------------
 LOCAL_LIB_DIR = os.path.join(APP_FILES_DIR, "libs")
 CACHE_FILE = os.path.join(APP_FILES_DIR, "track_cache.json")
@@ -41,7 +189,7 @@ INSTALLATION_STATUS = {
 }
 
 # ---------------------------------------------------------
-# 3. Dynamic Package Management for yt-dlp
+# 4. Dynamic Package Management for yt-dlp
 # ---------------------------------------------------------
 def install_ytdlp_background():
     global INSTALLATION_STATUS
@@ -120,7 +268,7 @@ def get_install_status(params=None):
     }
 
 # ---------------------------------------------------------
-# 4. Thread-Safe Cache Helpers
+# 5. Thread-Safe Cache Helpers
 # ---------------------------------------------------------
 def _load_cache():
     if os.path.exists(CACHE_FILE):
@@ -141,7 +289,7 @@ def _save_cache(cache_data):
         print(f"[CACHE WRITE ERROR]: {e}")
 
 # ---------------------------------------------------------
-# 5. Fast Audio Streaming & Caching
+# 6. Audio Streaming, Caching & Notification Invocation
 # ---------------------------------------------------------
 def stream_and_trigger_download(params=None):
     if not params or not params.get("query"):
@@ -150,76 +298,102 @@ def stream_and_trigger_download(params=None):
     query = params.get("query").strip().lower()
     cache = _load_cache()
 
-    # Fast path: return cached track metadata directly
+    result = None
+
     if query in cache and cache[query].get("stream_url"):
-        cached_item = cache[query]
-        cached_item["from_cache"] = True
-        return cached_item
-
-    if not check_or_start_install():
+        result = cache[query]
+        result["from_cache"] = True
+    elif not check_or_start_install():
         return {"success": False, "error": f"yt-dlp not ready: {INSTALLATION_STATUS['message']}"}
+    else:
+        import yt_dlp
 
-    import yt_dlp
+        ydl_opts = {
+            'format': 'ba[ext=m4a]/ba[ext=webm]/ba/worst',
+            'noplaylist': True,
+            'quiet': True,
+            'no_warnings': True,
+            'default_search': 'ytsearch1',
+            'nocheckcertificate': True,
+            'skip_download': True,
+            'extract_flat': False,
+            'socket_timeout': 8,
+        }
 
-    ydl_opts = {
-        'format': 'ba[ext=m4a]/ba[ext=webm]/ba/worst',
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True,
-        'default_search': 'ytsearch1',
-        'nocheckcertificate': True,
-        'skip_download': True,
-        'extract_flat': False,
-        'socket_timeout': 8,
-    }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                target = query if (query.startswith("http") or len(query) == 11) else f"ytsearch1:{query}"
+                info = ydl.extract_info(target, download=False)
+                video = info['entries'][0] if 'entries' in info and info['entries'] else info
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            target = query if (query.startswith("http") or len(query) == 11) else f"ytsearch1:{query}"
-            info = ydl.extract_info(target, download=False)
-            video = info['entries'][0] if 'entries' in info and info['entries'] else info
+                video_id = video.get('id')
+                stream_url = video.get('url')
 
-            video_id = video.get('id')
-            stream_url = video.get('url')
+                if not stream_url:
+                    return {"success": False, "error": "No stream URL extracted."}
 
-            if not stream_url:
-                return {"success": False, "error": "No stream URL extracted."}
+                title = video.get('title', 'Unknown Title')
+                artist = video.get('uploader') or video.get('channel') or 'Unknown Artist'
+                
+                thumbnails = video.get('thumbnails', [])
+                thumbnail_url = video.get('thumbnail') or (thumbnails[-1].get('url') if thumbnails else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
 
-            title = video.get('title', 'Unknown Title')
-            artist = video.get('uploader') or video.get('channel') or 'Unknown Artist'
-            
-            thumbnails = video.get('thumbnails', [])
-            thumbnail_url = video.get('thumbnail') or (thumbnails[-1].get('url') if thumbnails else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
+                result = {
+                    "success": True,
+                    "id": video_id,
+                    "title": title,
+                    "artist": artist,
+                    "thumbnail": thumbnail_url,
+                    "stream_url": stream_url,
+                    "duration": video.get('duration', 0),
+                    "from_cache": False
+                }
 
-            result = {
-                "success": True,
-                "id": video_id,
-                "title": title,
-                "artist": artist,
-                "thumbnail": thumbnail_url,
-                "stream_url": stream_url,
-                "duration": video.get('duration', 0),
-                "from_cache": False
-            }
+                cache[query] = result
+                if video_id:
+                    cache[video_id] = result
+                _save_cache(cache)
 
-            cache[query] = result
-            if video_id:
-                cache[video_id] = result
-            _save_cache(cache)
+        except Exception as e:
+            return {"success": False, "error": f"Extraction error: {str(e)}"}
 
-            return result
+    # Post native media notification
+    if result and result.get("success") and MEDIA_NOTIF_MANAGER:
+        MEDIA_NOTIF_MANAGER.update_notification(
+            title=result.get("title", "Unknown"),
+            artist=result.get("artist", "Unknown"),
+            thumbnail_url=result.get("thumbnail"),
+            duration_sec=result.get("duration", 0),
+            is_playing=True,
+            position_sec=0
+        )
 
-    except Exception as e:
-        return {"success": False, "error": f"Extraction error: {str(e)}"}
+    return result
+
+def update_playback_progress(params=None):
+    """
+    Call this periodically from your Python/Toga audio timer loop 
+    to update the notification slider and state.
+    """
+    if not params:
+        return {"success": False, "error": "No parameters provided."}
+
+    position = params.get("position", 0)
+    is_playing = params.get("is_playing", True)
+
+    if MEDIA_NOTIF_MANAGER:
+        MEDIA_NOTIF_MANAGER.update_progress(position, is_playing)
+    return {"success": True}
+
+def dismiss_media_notification(params=None):
+    if MEDIA_NOTIF_MANAGER:
+        MEDIA_NOTIF_MANAGER.dismiss()
+    return {"success": True}
 
 # ---------------------------------------------------------
-# 6. Fixed Recommendation Engine (Fast Flat Extraction)
+# 7. Recommendation Engine (Flat Extraction)
 # ---------------------------------------------------------
 def get_recommendations(params=None):
-    """
-    Finds related tracks instantly using flat search extraction.
-    Returns metadata immediately and leaves stream_url as None to avoid network timeouts.
-    """
     if not params or not (params.get("id") or params.get("query")):
         return {"success": False, "error": "Track ID or Query required."}
 
@@ -233,7 +407,6 @@ def get_recommendations(params=None):
 
     cache = _load_cache()
 
-    # Build smart search target based on track metadata or query
     if query:
         search_target = f"ytsearch6:{query} music"
     elif track_id and track_id in cache:
@@ -249,7 +422,7 @@ def get_recommendations(params=None):
         'no_warnings': True,
         'nocheckcertificate': True,
         'skip_download': True,
-        'extract_flat': 'in_playlist',  # Instant metadata fetch without downloading full video info
+        'extract_flat': 'in_playlist',
         'socket_timeout': 6,
     }
 
@@ -265,7 +438,6 @@ def get_recommendations(params=None):
                 if not vid_id or vid_id == track_id:
                     continue
 
-                # Return cached track directly if available
                 if vid_id in cache:
                     recommendations.append(cache[vid_id])
                     continue
@@ -282,7 +454,7 @@ def get_recommendations(params=None):
                     "title": title,
                     "artist": artist,
                     "thumbnail": thumbnail_url,
-                    "stream_url": None,  # Resolved on-demand when clicked via stream_and_trigger_download
+                    "stream_url": None,
                     "duration": entry.get('duration', 0),
                     "from_cache": False
                 }
@@ -298,7 +470,6 @@ def get_recommendations(params=None):
         return {"success": False, "error": f"Failed to get recommendations: {str(e)}"}
 
 def get_cached_tracks(params=None):
-    """Retrieve all previously searched and saved track details."""
     cache = _load_cache()
     unique_tracks = {}
     for key, item in cache.items():
@@ -307,7 +478,6 @@ def get_cached_tracks(params=None):
     return {"success": True, "tracks": list(unique_tracks.values())}
 
 def clear_cache(params=None):
-    """Clear local cached track details."""
     if os.path.exists(CACHE_FILE):
         try:
             with CACHE_LOCK:
@@ -318,7 +488,7 @@ def clear_cache(params=None):
     return {"success": True, "message": "Cache was already empty."}
 
 # ---------------------------------------------------------
-# 7. Lyrics Parsing and Fetching
+# 8. Synchronized Lyrics Fetcher
 # ---------------------------------------------------------
 def parse_lrc(lrc_text):
     if not lrc_text:

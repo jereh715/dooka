@@ -183,6 +183,52 @@
     return W('Last status: "' + j.status + '". Run the camera test and take a photo first.');
   }, true);
 
+  // ---------------- Projection (video mode) ----------------
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Waits for a status line that matches `re` and differs from `before`
+  // (so an old message from a previous run is not mistaken for a new one).
+  async function waitStatus(re, ms, before) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      const { j } = await getJSON('/api/status');
+      if (j && j.status !== before && re.test(j.status)) return j.status;
+      await sleep(1000);
+    }
+    return null;
+  }
+
+  def('Projection (video)', 'Start screen recording', async () => {
+    const before = (await getJSON('/api/status')).j.status;
+    const { r, j } = await getJSON('/api/hardware/projection?mode=video');
+    if (!j) return F('HTTP ' + r.status);
+    if (j.error) return /requires an Android/i.test(j.error) ? W('Desktop: ' + j.error) : F(j.error);
+    const s = await waitStatus(/Capture Pipeline Active|Projection ready|Canceled/i, 25000, before);
+    if (!s) return W('Request sent, but nothing confirmed in 25s. Accept the system dialog, then run again.');
+    if (/Canceled/i.test(s)) return W('Cancelled in the system dialog.');
+    return P(s + '\nThe "Screen recording in progress" notification should be showing.');
+  }, true);
+
+  def('Projection (video)', 'Stop screen recording', async () => {
+    const before = (await getJSON('/api/status')).j.status;
+    const { r, j } = await getJSON('/api/hardware/stop_projection');
+    if (!j) return F('HTTP ' + r.status);
+    if (j.error) return F(j.error);
+    if (/mock/i.test(j.message || '')) return W('Desktop mock: ' + j.message);
+    const s = await waitStatus(/Video recorded natively/i, 15000, before);
+    return s ? P(s) : W('Stopped, but no "video saved" message within 15s.');
+  }, true);
+
+  def('Projection (video)', 'Recording notification (show, then stop)', async () => {
+    const a = await getJSON('/api/hardware/notification/projection?state=start');
+    if (!a.j) return F('HTTP ' + a.r.status);
+    if (!a.j.success) return /permission/i.test(a.j.status) ? W(a.j.status + ' Allow it, then run again.') : F(a.j.status);
+    await sleep(2500);
+    const b = await getJSON('/api/hardware/notification/projection?state=stop');
+    if (/Mock/.test(a.j.status)) return W('Desktop mock: ' + a.j.status);
+    return b.j && b.j.success ? P('Posted "in progress", then "stopped". Check the shade.') : F(b.j ? b.j.status : 'HTTP ' + b.r.status);
+  }, true);
+
   // ---------------- Player ----------------
   ['Audio', 'Video', 'Images'].forEach((type) => {
     def('Player', 'Scan ' + type.toLowerCase(), async () => {

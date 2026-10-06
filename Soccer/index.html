@@ -1,1112 +1,363 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<title>Tumble Run — Marble Race</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plugin Tester</title>
 <style>
-  :root{
-    --ink: #17123a;
-    --panel: rgba(23, 18, 58, 0.72);
-    --panel-edge: rgba(255,255,255,0.14);
-    --c-yellow: #FFD93D;
-    --c-red: #FF4B4B;
-    --c-blue: #2F8CED;
-    --c-green: #2ECC71;
-    --glow: #7CF7FF;
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-left: env(safe-area-inset-left, 0px);
-    --safe-right: env(safe-area-inset-right, 0px);
-  }
-  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body{
-    margin:0; padding:0; width:100%; height:100%;
-    overflow:hidden; overscroll-behavior:none; touch-action:none;
-    background: radial-gradient(ellipse at 50% 20%, #2a1f5e 0%, #150f34 55%, #0b0820 100%);
-    font-family: 'Nunito', system-ui, sans-serif;
-    color: #f2effb;
-  }
-  #canvasHost{ position:fixed; inset:0; }
-  canvas{ display:block; width:100%; height:100%; touch-action:none; }
-
-  .heading{
-    font-family: 'Baloo 2', system-ui, sans-serif;
-    font-weight: 800;
-  }
-
-  /* ---------- overlays ---------- */
-  .overlay{
-    position:fixed; inset:0;
-    display:flex; align-items:center; justify-content:center;
-    padding: calc(20px + var(--safe-top)) calc(20px + var(--safe-right)) calc(20px + var(--safe-bottom)) calc(20px + var(--safe-left));
-    z-index: 10;
-  }
-  .overlay.hidden{ display:none; }
-  .card{
-    width:100%; max-width: 440px;
-    background: var(--panel);
-    border: 1px solid var(--panel-edge);
-    border-radius: 28px;
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    padding: 28px 24px 24px;
-    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
-    text-align:center;
-    max-height: calc(100vh - 40px);
-    overflow-y: auto;
-  }
-  .kicker{
-    font-size: 14px; letter-spacing: 0.02em; color: #b9aeef; margin: 0 0 6px;
-  }
-  h1.title{
-    font-size: 34px; line-height: 1.05; margin: 0 0 8px; color:#fff;
-  }
-  p.sub{
-    font-size: 15px; color:#cfc7ee; margin: 0 0 22px; line-height:1.45;
-  }
-
-  .ball-grid{
-    display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;
-  }
-  .ball-choice{
-    border: 2px solid transparent;
-    background: rgba(255,255,255,0.06);
-    border-radius: 18px;
-    padding: 16px 10px 12px;
-    display:flex; flex-direction:column; align-items:center; gap:8px;
-    cursor:pointer; user-select:none;
-    transition: transform .12s ease, background .12s ease, border-color .12s ease;
-    min-height: 92px;
-  }
-  .ball-choice:active{ transform: scale(0.96); }
-  .ball-choice .dot{
-    width:38px; height:38px; border-radius:50%;
-    box-shadow: inset -4px -6px 10px rgba(0,0,0,0.25), inset 3px 4px 6px rgba(255,255,255,0.5), 0 0 18px 2px var(--dot-glow, transparent);
-  }
-  .ball-choice span{ font-weight:800; font-size:14px; color:#efeafc; }
-  .ball-choice[data-color="yellow"] .dot{ background: var(--c-yellow); }
-  .ball-choice[data-color="red"] .dot{ background: var(--c-red); }
-  .ball-choice[data-color="blue"] .dot{ background: var(--c-blue); }
-  .ball-choice[data-color="green"] .dot{ background: var(--c-green); }
-  .ball-choice.selected{ background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.6); }
-  .ball-choice.selected[data-color="yellow"]{ --dot-glow: var(--c-yellow); border-color: var(--c-yellow); }
-  .ball-choice.selected[data-color="red"]{ --dot-glow: var(--c-red); border-color: var(--c-red); }
-  .ball-choice.selected[data-color="blue"]{ --dot-glow: var(--c-blue); border-color: var(--c-blue); }
-  .ball-choice.selected[data-color="green"]{ --dot-glow: var(--c-green); border-color: var(--c-green); }
-
-  .btn{
-    display:block; width:100%; border:none; border-radius:16px;
-    padding:16px 18px; font-family:'Baloo 2', system-ui, sans-serif; font-weight:700; font-size:18px;
-    cursor:pointer; color:#191333;
-    background: linear-gradient(180deg, #8CF7E8, var(--glow));
-    box-shadow: 0 10px 22px rgba(124,247,255,0.28);
-    transition: transform .12s ease, opacity .12s ease;
-  }
-  .btn:active{ transform: scale(0.97); }
-  .btn:disabled{ opacity:0.4; pointer-events:none; }
-  .btn.secondary{
-    background: rgba(255,255,255,0.1); color:#f2effb;
-    border: 1px solid var(--panel-edge); box-shadow:none;
-  }
-
-  /* ---------- HUD ---------- */
-  #hud{
-    position:fixed; inset:0; pointer-events:none; z-index:5;
-    padding: calc(14px + var(--safe-top)) calc(14px + var(--safe-right)) calc(14px + var(--safe-bottom)) calc(14px + var(--safe-left));
-    display:flex; flex-direction:column; justify-content:space-between;
-  }
-  #hud.hidden{ display:none; }
-  .hud-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-  .timer-pill{
-    background: rgba(15,10,40,0.55); border:1px solid var(--panel-edge); backdrop-filter: blur(10px);
-    border-radius: 14px; padding: 8px 16px; font-family:'Baloo 2'; font-weight:700; font-size:20px; color:#fff;
-    min-width: 64px; text-align:center;
-  }
-  .you-pill{
-    background: rgba(15,10,40,0.55); border:1px solid var(--panel-edge); backdrop-filter: blur(10px);
-    border-radius: 14px; padding: 8px 14px; font-weight:800; font-size:14px; display:flex; align-items:center; gap:8px;
-  }
-  .you-pill .swatch{ width:14px; height:14px; border-radius:50%; }
-
-  .pan-hint{
-    align-self:center;
-    background: rgba(15,10,40,0.55); border:1px solid var(--panel-edge); backdrop-filter: blur(10px);
-    border-radius: 999px; padding: 7px 16px; font-size:12px; font-weight:700; color:#e6e0ff;
-    opacity: 1; transition: opacity .6s ease;
-    margin: 0 0 8px;
-  }
-  .pan-hint.faded{ opacity: 0; }
-  .progress-panel{
-    background: rgba(15,10,40,0.55); border:1px solid var(--panel-edge); backdrop-filter: blur(10px);
-    border-radius: 18px; padding: 12px 14px; display:flex; flex-direction:column; gap:9px;
-  }
-  .progress-row{ display:flex; align-items:center; gap:8px; }
-  .progress-row .swatch{ width:12px; height:12px; border-radius:50%; flex:none; }
-  .progress-track{ flex:1; height:8px; border-radius:6px; background:rgba(255,255,255,0.12); overflow:hidden; }
-  .progress-fill{ height:100%; border-radius:6px; width:0%; transition:width .08s linear; }
-  .progress-row .rank{ width:16px; font-size:12px; font-weight:800; text-align:center; color:#cfc7ee; }
-
-  /* ---------- results ---------- */
-  .standings{ text-align:left; margin: 6px 0 22px; display:flex; flex-direction:column; gap:8px; }
-  .standing-row{
-    display:flex; align-items:center; gap:12px;
-    background:rgba(255,255,255,0.06); border-radius:14px; padding:10px 14px;
-  }
-  .standing-row .place{ font-family:'Baloo 2'; font-weight:800; font-size:18px; width:26px; color:#cfc7ee; }
-  .standing-row .swatch{ width:20px; height:20px; border-radius:50%; flex:none; }
-  .standing-row .name{ font-weight:800; flex:1; }
-  .standing-row .time{ font-size:13px; color:#cfc7ee; }
-  .standing-row.me{ outline: 2px solid var(--glow); }
-
-  #tapHint{
-    position:fixed; left:0; right:0; bottom: calc(18px + var(--safe-bottom));
-    text-align:center; font-size:13px; color:#cfc7ee; pointer-events:none; z-index:5; opacity:0.85;
-  }
+  :root { --bg:#0d0f17; --card:#161925; --line:#232838; --text:#e1e4ed; --dim:#7a8499;
+          --pass:#00c853; --warn:#f5a524; --fail:#ea4335; --idle:#3a4258; --accent:#3886ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px 16px 40px; background:var(--bg); color:var(--text);
+         font-family:-apple-system,"Segoe UI",Roboto,sans-serif; font-size:14px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--dim); font-size:12px; margin-bottom:14px; line-height:1.4; }
+  .bar { display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  button { border:none; border-radius:6px; padding:8px 12px; font-weight:600; font-size:12px;
+           color:#fff; background:var(--accent); cursor:pointer; }
+  button.ghost { background:#2d3448; }
+  button:disabled { opacity:.5; }
+  button:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+  #summary { color:var(--dim); font-size:12px; margin-left:auto; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; margin-bottom:14px; overflow:hidden; }
+  section > h2 { margin:0; padding:10px 12px; font-size:14px; border-bottom:1px solid var(--line); }
+  .row { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-bottom:1px solid var(--line); }
+  .row:last-child { border-bottom:none; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--idle); margin-top:4px; flex:none; }
+  .dot.pass { background:var(--pass); } .dot.warn { background:var(--warn); }
+  .dot.fail { background:var(--fail); } .dot.run { background:var(--accent); animation:pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity:.3; } }
+  .info { flex:1; min-width:0; }
+  .name { font-weight:600; }
+  .tag { color:var(--dim); font-weight:400; font-size:11px; margin-left:6px; }
+  .detail { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; color:var(--dim);
+            margin-top:3px; word-break:break-word; white-space:pre-wrap; }
+  .detail.pass { color:var(--pass); } .detail.warn { color:var(--warn); } .detail.fail { color:var(--fail); }
+  .media { padding:12px; display:flex; flex-direction:column; gap:10px; }
+  .media .btns { display:flex; gap:8px; flex-wrap:wrap; }
+  audio, video { width:100%; border-radius:6px; background:#000; }
+  video { max-height:200px; } img#img { max-width:100%; max-height:200px; object-fit:contain; display:none; border-radius:6px; }
+  pre#log { margin:0; padding:10px 12px; max-height:180px; overflow:auto; font-size:11px; color:var(--dim);
+            font-family:ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; }
 </style>
 </head>
 <body>
 
-<div id="canvasHost"></div>
+<h1>Plugin Tester</h1>
+<div class="sub">Calls the player, notifications, location and camera plugins through the local Operat server.
+  On desktop most checks report mock responses (amber). Run on a phone for real results.</div>
 
-<div id="hud" class="hidden">
-  <div class="hud-top">
-    <div class="you-pill"><span class="swatch" id="youSwatch"></span><span id="youLabel">You: —</span></div>
-    <div class="timer-pill" id="timerPill">0.0s</div>
-  </div>
-  <div id="panHint" class="pan-hint">Drag to look around</div>
-  <div class="progress-panel" id="progressPanel"></div>
+<div class="bar">
+  <button id="runAll">Run all checks</button>
+  <button id="clearAll" class="ghost">Reset</button>
+  <span id="summary"></span>
 </div>
 
-<div id="startScreen" class="overlay">
-  <div class="card">
-    <p class="kicker heading">TUMBLE RUN</p>
-    <h1 class="title heading">Pick your marble</h1>
-    <p class="sub">Four marbles, one wild randomized course of pegs, spinners, boosts and gates. Pick a color and watch the chaos unfold — 60 to 90 seconds of tumbling.</p>
-    <div class="ball-grid" id="ballGrid">
-      <div class="ball-choice" data-color="yellow"><div class="dot"></div><span>Yellow</span></div>
-      <div class="ball-choice" data-color="red"><div class="dot"></div><span>Red</span></div>
-      <div class="ball-choice" data-color="blue"><div class="dot"></div><span>Blue</span></div>
-      <div class="ball-choice" data-color="green"><div class="dot"></div><span>Green</span></div>
+<div id="groups"></div>
+
+<section>
+  <h2>Playback</h2>
+  <div class="media">
+    <div class="btns">
+      <button class="ghost" data-load="Audio">Load first audio</button>
+      <button class="ghost" data-load="Video">Load first video</button>
+      <button class="ghost" data-load="Images">Load first image</button>
     </div>
-    <button class="btn" id="startBtn" disabled>Choose a marble</button>
+    <div id="nowPlaying" class="detail">Scan each type above first, then load a file.</div>
+    <audio id="aud" controls></audio>
+    <video id="vid" controls playsinline></video>
+    <img id="img" alt="Loaded image">
   </div>
-</div>
+</section>
 
-<div id="resultScreen" class="overlay hidden">
-  <div class="card">
-    <p class="kicker heading" id="resultKicker">RACE OVER</p>
-    <h1 class="title heading" id="resultTitle">You won!</h1>
-    <p class="sub" id="resultSub">Here's how everyone finished.</p>
-    <div class="standings" id="standings"></div>
-    <button class="btn" id="againBtn">Race again</button>
-  </div>
-</div>
+<section>
+  <h2>Event log</h2>
+  <pre id="log"></pre>
+</section>
 
-<div id="tapHint">Tap a marble to begin</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-(function(){
-  "use strict";
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const state = { media: null, nowTitle: null };
+  const tests = [];
 
-  /* ===================== CONSTANTS ===================== */
-  var COLORS = {
-    yellow: { hex: 0xFFD93D, name: 'Yellow' },
-    red:    { hex: 0xFF4B4B, name: 'Red' },
-    blue:   { hex: 0x2F8CED, name: 'Blue' },
-    green:  { hex: 0x2ECC71, name: 'Green' }
+  const P = (d) => ({ state: 'pass', detail: d });
+  const W = (d) => ({ state: 'warn', detail: d });
+  const F = (d) => ({ state: 'fail', detail: d });
+
+  function def(group, name, fn, manual) { tests.push({ group, name, fn, manual: !!manual, id: tests.length }); }
+
+  function log(msg) {
+    const el = $('#log');
+    const t = new Date().toLocaleTimeString();
+    el.textContent += '[' + t + '] ' + msg + '\n';
+    el.scrollTop = el.scrollHeight;
+  }
+
+  async function getJSON(url) {
+    const r = await fetch(url);
+    let j = null;
+    try { j = await r.json(); } catch (e) {}
+    return { r, j };
+  }
+
+  const streamUrl = (uri) => '/player/stream?uri=' + encodeURIComponent(uri);
+  const isMock = (uri) => String(uri).indexOf('mock_') === 0;
+
+  function firstItem(type) {
+    const o = (state.media && state.media[type]) || {};
+    const k = Object.keys(o).sort((a, b) => a.localeCompare(b))[0];
+    return k ? { name: k, uri: o[k] } : null;
+  }
+
+  // Reads up to n bytes of a response body, then cancels the rest.
+  async function readUpTo(resp, n) {
+    const reader = resp.body.getReader();
+    let got = 0;
+    while (got < n) {
+      const c = await reader.read();
+      if (c.done) break;
+      got += c.value.length;
+    }
+    try { await reader.cancel(); } catch (e) {}
+    return got;
+  }
+
+  function once(el, ev, ms) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { el.removeEventListener(ev, h); reject(new Error('Timed out waiting for "' + ev + '"')); }, ms);
+      function h() { clearTimeout(t); resolve(); }
+      el.addEventListener(ev, h, { once: true });
+    });
+  }
+
+  // ---------------- Core ----------------
+  def('Core', 'Server reachable', async () => {
+    const { r, j } = await getJSON('/api/status');
+    if (!r.ok || !j) return F('HTTP ' + r.status);
+    return P(j.status + ' (projection mode: ' + j.mode + ')');
+  });
+
+  // ---------------- Location ----------------
+  def('Location', 'Last known position', async () => {
+    const { r, j } = await getJSON('/api/hardware/location');
+    if (!j) return F('HTTP ' + r.status);
+    if (j.error) return j.lat !== undefined ? W('Desktop mock: ' + j.lat + ', ' + j.lon) : F(j.error);
+    if (j.status === 'Permission Requested') return W('Permission requested. Allow it, then run again.');
+    if (j.lat !== undefined) return P(j.lat.toFixed(5) + ', ' + j.lon.toFixed(5) + ' (accuracy ' + Math.round(j.accuracy) + ' m)');
+    return W(j.message || 'No cached fix yet. Open a maps app once, then run again.');
+  });
+
+  // ---------------- Notifications ----------------
+  def('Notifications', 'Standard notification', async () => {
+    const q = new URLSearchParams({ title: 'Operat test', msg: 'Hello from the plugin tester' });
+    const { r, j } = await getJSON('/api/hardware/notification?' + q);
+    if (!j || j.error) return F(j ? j.error : 'HTTP ' + r.status);
+    if (j.status === 'Permission Requested') return W('Permission requested. Allow it, then run again.');
+    if (/^Mock/.test(j.status)) return W('Desktop mock: ' + j.status);
+    return P(j.message || j.status);
+  });
+
+  def('Notifications', 'Media notification (play, then pause)', async () => {
+    const base = '/player/api/notification/media?title=' + encodeURIComponent('Test track') + '&action=';
+    const a = await getJSON(base + 'play');
+    if (!a.j) return F('HTTP ' + a.r.status);
+    if (!a.j.success) return /permission/i.test(a.j.status) ? W(a.j.status + ' Allow it, then run again.') : F(a.j.status);
+    const b = await getJSON(base + 'pause');
+    if (!b.j || !a.j.state.is_playing || b.j.state.is_playing) return F('Play/pause state did not toggle');
+    return /Mock/.test(a.j.status) ? W('Desktop mock. State toggles correctly.') : P(a.j.status + '. Check the shade for controls.');
+  });
+
+  // ---------------- Camera ----------------
+  def('Camera', 'Open system camera', async () => {
+    const { r, j } = await getJSON('/api/hardware/camera');
+    if (!j) return F('HTTP ' + r.status);
+    if (j.error) return /mobile hardware/i.test(j.error) ? W('Desktop: ' + j.error) : F(j.error);
+    if (/Permission/i.test(j.status)) return W(j.status + '. Allow it, then run again.');
+    return P(j.status + '. Take a photo; the status line should say it was captured.');
+  }, true);
+
+  def('Camera', 'Capture result reaches the server', async () => {
+    const { j } = await getJSON('/api/status');
+    if (/Photo Captured/i.test(j.status)) return P(j.status);
+    return W('Last status: "' + j.status + '". Run the camera test and take a photo first.');
+  }, true);
+
+  // ---------------- Player ----------------
+  ['Audio', 'Video', 'Images'].forEach((type) => {
+    def('Player', 'Scan ' + type.toLowerCase(), async () => {
+      const { r, j } = await getJSON('/player/api/scan?type=' + type);
+      if (!j) return F('HTTP ' + r.status);
+      if (!j.success) return /permission/i.test(j.error) ? W(j.error) : F(j.error);
+      const m = await getJSON('/player/api/media');
+      state.media = m.j;
+      const items = Object.keys(m.j[type] || {});
+      if (!items.length) return W('Scan succeeded but found 0 files');
+      if (isMock(m.j[type][items[0]])) return W('Desktop mock: ' + items.length + ' fake item');
+      return P(items.length + ' files found');
+    });
+  });
+
+  def('Player', 'Stream: full response and byte range', async () => {
+    const it = firstItem('Audio') || firstItem('Video') || firstItem('Images');
+    if (!it) return W('No scanned media. Run the scans first.');
+    if (isMock(it.uri)) return W('Desktop mock URI. Needs a device.');
+    const url = streamUrl(it.uri);
+
+    const full = await fetch(url);
+    const type = full.headers.get('content-type');
+    const len = full.headers.get('content-length');
+    const ar = full.headers.get('accept-ranges');
+    await readUpTo(full, 1);
+    if (!full.ok) return F('Full request returned HTTP ' + full.status);
+
+    if (ar !== 'bytes' || !len) return W('Server could not report a size, so ranges are off. type=' + type);
+
+    const part = await fetch(url, { headers: { Range: 'bytes=0-1023' } });
+    const got = await readUpTo(part, 1024);
+    const cr = part.headers.get('content-range');
+    const expect = Math.min(1024, Number(len));
+    if (part.status !== 206) return F('Range request returned HTTP ' + part.status + ' instead of 206');
+    if (got !== expect) return F('Expected ' + expect + ' bytes, got ' + got);
+    return P(it.name + '\ntype=' + type + ', size=' + len + ' bytes\nrange 0-1023 -> 206, ' + cr);
+  });
+
+  def('Player', 'Stream rejects non-media URIs', async () => {
+    const r = await fetch('/player/stream?uri=' + encodeURIComponent('content://com.android.contacts/contacts'));
+    if (r.status === 403) return P('HTTP 403 as expected');
+    const text = await r.text();
+    if (/MOCK MEDIA/.test(text)) return W('Desktop mock answers before the check. Only enforced on a device.');
+    return F('Expected 403, got HTTP ' + r.status);
+  });
+
+  def('Player', 'Seeking in audio (needs byte ranges)', async () => {
+    const it = firstItem('Audio');
+    if (!it) return W('Scan audio first.');
+    if (isMock(it.uri)) return W('Desktop mock URI. Needs a device.');
+    const a = $('#aud');
+    a.src = streamUrl(it.uri);
+    await once(a, 'loadedmetadata', 10000);
+    if (!isFinite(a.duration) || a.duration < 2) return W('Track too short or unknown length to test seeking.');
+    const target = a.duration / 2;
+    a.currentTime = target;
+    await once(a, 'seeked', 10000);
+    const off = Math.abs(a.currentTime - target);
+    return off < 2 ? P('Jumped to ' + a.currentTime.toFixed(1) + 's of ' + a.duration.toFixed(1) + 's') : F('Landed ' + off.toFixed(1) + 's away from target');
+  }, true);
+
+  // ---------------- Rendering & running ----------------
+  function render() {
+    const root = $('#groups');
+    root.innerHTML = '';
+    const groups = [];
+    tests.forEach((t) => { if (groups.indexOf(t.group) < 0) groups.push(t.group); });
+
+    groups.forEach((g) => {
+      const sec = document.createElement('section');
+      const h = document.createElement('h2');
+      h.textContent = g;
+      sec.appendChild(h);
+
+      tests.filter((t) => t.group === g).forEach((t) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.id = 'row' + t.id;
+
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+
+        const info = document.createElement('div');
+        info.className = 'info';
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = t.name;
+        if (t.manual) {
+          const tag = document.createElement('span');
+          tag.className = 'tag';
+          tag.textContent = 'run manually';
+          name.appendChild(tag);
+        }
+        const detail = document.createElement('div');
+        detail.className = 'detail';
+        info.append(name, detail);
+
+        const btn = document.createElement('button');
+        btn.className = 'ghost';
+        btn.textContent = 'Run';
+        btn.onclick = () => runTest(t);
+
+        row.append(dot, info, btn);
+        sec.appendChild(row);
+      });
+      root.appendChild(sec);
+    });
+  }
+
+  function paint(t, s, detail) {
+    const row = $('#row' + t.id);
+    row.querySelector('.dot').className = 'dot ' + s;
+    const d = row.querySelector('.detail');
+    d.className = 'detail ' + s;
+    d.textContent = detail;
+  }
+
+  async function runTest(t) {
+    const btn = $('#row' + t.id + ' button');
+    btn.disabled = true;
+    paint(t, 'run', 'Running...');
+    let res;
+    try { res = await t.fn(); } catch (e) { res = F(e && e.message ? e.message : String(e)); }
+    t.result = res.state;
+    paint(t, res.state, res.detail);
+    log(t.group + ' / ' + t.name + ': ' + res.state.toUpperCase());
+    btn.disabled = false;
+    summarize();
+  }
+
+  function summarize() {
+    const c = { pass: 0, warn: 0, fail: 0 };
+    tests.forEach((t) => { if (t.result) c[t.result]++; });
+    $('#summary').textContent = c.pass + ' passed, ' + c.warn + ' need attention, ' + c.fail + ' failed';
+  }
+
+  $('#runAll').onclick = async () => {
+    const btn = $('#runAll');
+    btn.disabled = true;
+    for (const t of tests.filter((x) => !x.manual)) { await runTest(t); }
+    btn.disabled = false;
   };
-  var ORDER = ['yellow','red','blue','green'];
-  var BALL_RADIUS = 1.0;
-  var START_OFFSETS = [-3.3, -1.1, 1.1, 3.3];
 
-  var GRAVITY_ACCEL = 15.5;
-  var DRAG = 0.85;
-  var LATERAL_SPRING = 5.0;
-  var LATERAL_DAMP = 4.6;
-  var BOUNCE_REST = 0.55;
-  var WALL_HEIGHT = 3.2;
-  var MAX_RACE_TIME = 100;
-  var STALL_TIMEOUT = 3.0; // seconds with no leader progress before an unstick nudge
+  $('#clearAll').onclick = () => { tests.forEach((t) => { t.result = null; }); render(); $('#summary').textContent = ''; $('#log').textContent = ''; };
 
-  var clamp = function(v,a,b){ return Math.max(a, Math.min(b,v)); };
-  var smooth = function(t){ return t*t*(3-2*t); };
-  var lerp = function(a,b,t){ return a+(b-a)*t; };
-
-  /* ===================== THREE SETUP ===================== */
-  var host = document.getElementById('canvasHost');
-  var scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x140f30, 0.0072);
-  scene.background = new THREE.Color(0x140f30);
-
-  var camera = new THREE.PerspectiveCamera(58, window.innerWidth/window.innerHeight, 0.1, 2000);
-  var renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = false;
-  host.appendChild(renderer.domElement);
-
-  window.addEventListener('resize', function(){
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+  // ---------------- Manual playback ----------------
+  document.querySelectorAll('[data-load]').forEach((b) => {
+    b.onclick = () => {
+      const type = b.getAttribute('data-load');
+      const it = firstItem(type);
+      if (!it) { $('#nowPlaying').textContent = 'Nothing scanned for ' + type + ' yet.'; return; }
+      if (isMock(it.uri)) { $('#nowPlaying').textContent = 'Desktop mock item. Needs a device.'; return; }
+      $('#aud').pause(); $('#vid').pause();
+      $('#img').style.display = 'none';
+      $('#nowPlaying').textContent = it.name;
+      state.nowTitle = null;
+      if (type === 'Audio') { state.nowTitle = it.name; $('#aud').src = streamUrl(it.uri); $('#aud').play().catch((e) => log('audio: ' + e)); }
+      if (type === 'Video') { $('#vid').src = streamUrl(it.uri); $('#vid').play().catch((e) => log('video: ' + e)); }
+      if (type === 'Images') { $('#img').src = streamUrl(it.uri); $('#img').style.display = 'block'; }
+    };
   });
 
-  var hemi = new THREE.HemisphereLight(0xbfd4ff, 0x1a1030, 0.85);
-  scene.add(hemi);
-  var sun = new THREE.DirectionalLight(0xfff2d6, 1.0);
-  sun.position.set(30, 60, 20);
-  scene.add(sun);
-  var fill = new THREE.PointLight(0x7cf7ff, 0.6, 0, 2);
-  fill.position.set(-20, 20, -10);
-  scene.add(fill);
-
-  // starry backdrop
-  (function addStars(){
-    var starGeom = new THREE.BufferGeometry();
-    var starCount = 500;
-    var pos = new Float32Array(starCount*3);
-    for(var i=0;i<starCount;i++){
-      pos[i*3] = (Math.random()*2-1) * 500;
-      pos[i*3+1] = Math.random()*260 - 20;
-      pos[i*3+2] = (Math.random()*2-1) * 900 - 300;
-    }
-    starGeom.setAttribute('position', new THREE.BufferAttribute(pos,3));
-    var starMat = new THREE.PointsMaterial({ color:0xffffff, size:1.4, transparent:true, opacity:0.7 });
-    scene.add(new THREE.Points(starGeom, starMat));
-  })();
-
-  /* ===================== TRACK GENERATION ===================== */
-  function interpControls(controls, zq, key){
-    if(zq >= controls[0].z) return controls[0][key];
-    var last = controls[controls.length-1];
-    if(zq <= last.z) return last[key];
-    for(var i=0;i<controls.length-1;i++){
-      var a=controls[i], b=controls[i+1];
-      if(zq<=a.z && zq>=b.z){
-        var t=(a.z-zq)/((a.z-b.z)||0.0001);
-        return lerp(a[key], b[key], smooth(t));
-      }
-    }
-    return last[key];
+  // Audio events drive the notification, same as the real player.
+  function notify(action) {
+    if (!state.nowTitle) return;
+    fetch('/player/api/notification/media?title=' + encodeURIComponent(state.nowTitle) + '&action=' + action).catch(() => {});
+    log('audio ' + action + ' -> notification updated');
   }
-
-  function generateTrack(){
-    var trackLength = 780 + Math.random()*280; // ~780-1060 units
-    var START_Y = 44;
-    var DROP_RATE = 0.155;
-    var BASE_HW = 7.2;
-    var step = 40;
-
-    var centerControls = [{z:0, x:0}];
-    var z = 0;
-    while(z > -trackLength+90){
-      z -= step*(0.75+Math.random()*0.6);
-      if(z <= -trackLength+90) break;
-      var prevX = centerControls[centerControls.length-1].x;
-      var nx = clamp(prevX + (Math.random()*2-1)*11, -16, 16);
-      centerControls.push({z:z, x:nx});
-    }
-    centerControls.push({z:-trackLength, x:0});
-
-    var widthControls = [{z:0, hw:BASE_HW}];
-    z = 0;
-    while(z > -trackLength+90){
-      z -= step*(0.75+Math.random()*0.75);
-      if(z <= -trackLength+90) break;
-      var hw = Math.random()<0.26 ? (2.8+Math.random()*1.0) : (BASE_HW-2.2+Math.random()*4.2);
-      widthControls.push({z:z, hw:hw});
-    }
-    widthControls.push({z:-trackLength, hw:BASE_HW});
-
-    var centerX = function(zq){ return interpControls(centerControls, zq, 'x'); };
-    var halfWidth = function(zq){ return interpControls(widthControls, zq, 'hw'); };
-    var surfaceY = function(zq){ return START_Y + DROP_RATE*zq; };
-
-    return { trackLength:trackLength, centerX:centerX, halfWidth:halfWidth, surfaceY:surfaceY, START_Y:START_Y, DROP_RATE:DROP_RATE };
-  }
-
-  function buildTrackMesh(track){
-    var group = new THREE.Group();
-    var segStep = 5;
-    var pts = [];
-    for(var z=0; z >= -track.trackLength; z -= segStep){
-      pts.push({ z:z, cx:track.centerX(z), hw:track.halfWidth(z), y:track.surfaceY(z) });
-    }
-    var lastZ = -track.trackLength;
-    pts.push({ z:lastZ, cx:track.centerX(lastZ), hw:track.halfWidth(lastZ), y:track.surfaceY(lastZ) });
-
-    var floorPos = [], wallLPos = [], wallRPos = [], linePos = [];
-
-    for(var i=0;i<pts.length-1;i++){
-      var p0=pts[i], p1=pts[i+1];
-      var l0=[p0.cx-p0.hw, p0.y, p0.z], r0=[p0.cx+p0.hw, p0.y, p0.z];
-      var l1=[p1.cx-p1.hw, p1.y, p1.z], r1=[p1.cx+p1.hw, p1.y, p1.z];
-      floorPos.push.apply(floorPos, l0.concat(r0,r1, l0,r1,l1));
-
-      var l0t=[l0[0],l0[1]+WALL_HEIGHT,l0[2]], l1t=[l1[0],l1[1]+WALL_HEIGHT,l1[2]];
-      wallLPos.push.apply(wallLPos, l0.concat(l1,l1t, l0,l1t,l0t));
-
-      var r0t=[r0[0],r0[1]+WALL_HEIGHT,r0[2]], r1t=[r1[0],r1[1]+WALL_HEIGHT,r1[2]];
-      wallRPos.push.apply(wallRPos, r0.concat(r1t,r1, r0,r0t,r1t));
-
-      var lw = 0.35;
-      var cl0=[p0.cx-lw, p0.y+0.04, p0.z], cr0=[p0.cx+lw, p0.y+0.04, p0.z];
-      var cl1=[p1.cx-lw, p1.y+0.04, p1.z], cr1=[p1.cx+lw, p1.y+0.04, p1.z];
-      linePos.push.apply(linePos, cl0.concat(cr0,cr1, cl0,cr1,cl1));
-    }
-
-    var floorGeom = new THREE.BufferGeometry();
-    floorGeom.setAttribute('position', new THREE.Float32BufferAttribute(floorPos,3));
-    floorGeom.computeVertexNormals();
-    var floorMat = new THREE.MeshStandardMaterial({ color:0x241c52, roughness:0.6, metalness:0.12, side:THREE.DoubleSide });
-    group.add(new THREE.Mesh(floorGeom, floorMat));
-
-    var wallMat = new THREE.MeshStandardMaterial({ color:0x6c4bd6, emissive:0x2a1a5e, emissiveIntensity:0.5, roughness:0.45, side:THREE.DoubleSide });
-    var wallLGeom = new THREE.BufferGeometry();
-    wallLGeom.setAttribute('position', new THREE.Float32BufferAttribute(wallLPos,3));
-    wallLGeom.computeVertexNormals();
-    group.add(new THREE.Mesh(wallLGeom, wallMat));
-    var wallRGeom = new THREE.BufferGeometry();
-    wallRGeom.setAttribute('position', new THREE.Float32BufferAttribute(wallRPos,3));
-    wallRGeom.computeVertexNormals();
-    group.add(new THREE.Mesh(wallRGeom, wallMat));
-
-    var lineGeom = new THREE.BufferGeometry();
-    lineGeom.setAttribute('position', new THREE.Float32BufferAttribute(linePos,3));
-    lineGeom.computeVertexNormals();
-    var lineMat = new THREE.MeshBasicMaterial({ color:0x7cf7ff, transparent:true, opacity:0.55 });
-    group.add(new THREE.Mesh(lineGeom, lineMat));
-
-    return group;
-  }
-
-  /* ===================== OBSTACLES ===================== */
-  function generateObstacles(track){
-    var obstacles = [];
-    var z = -75;
-    var endZ = -(track.trackLength - 65);
-    var id = 0;
-    while(z > endZ){
-      var hw = track.halfWidth(z);
-      var cx = track.centerX(z);
-      var r = Math.random();
-      if(r < 0.30){
-        var count = 2 + Math.floor(Math.random()*2);
-        for(var i=0;i<count;i++){
-          var ox = (Math.random()*2-1) * hw * 0.62;
-          obstacles.push({ id:id++, type:'peg', x:cx+ox, z:z+(Math.random()*4-2), radius:1.05 });
-        }
-      } else if(r < 0.48){
-        obstacles.push({ id:id++, type:'rotor', x:cx, z:z, armLength: Math.max(2.4, hw*0.72), angle: Math.random()*Math.PI*2, speed:(Math.random()<0.5?1:-1)*(0.8+Math.random()*0.9) });
-      } else if(r < 0.66){
-        obstacles.push({ id:id++, type:'boost', x:cx, z:z, len:9, hw: hw*0.85, boost: 6+Math.random()*4 });
-      } else if(r < 0.82){
-        obstacles.push({ id:id++, type:'slow', x:cx, z:z, len:11, hw: hw*0.85 });
-      } else {
-        var n = 3;
-        for(var k=0;k<n;k++){
-          var ox2 = -hw*0.58 + (k/(n-1)) * hw*1.16;
-          obstacles.push({ id:id++, type:'peg', x:cx+ox2, z:z, radius:0.95 });
-        }
-      }
-      z -= 34 + Math.random()*24;
-    }
-    return obstacles;
-  }
-
-  function buildObstacleMeshes(obstacles){
-    var group = new THREE.Group();
-    var pegMat = new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xff6b6b, emissiveIntensity:0.35, roughness:0.35, metalness:0.2 });
-    var rotorMat = new THREE.MeshStandardMaterial({ color:0xffe066, emissive:0xffb347, emissiveIntensity:0.5, roughness:0.3 });
-    var boostMat = new THREE.MeshStandardMaterial({ color:0x2ecc71, emissive:0x1fae5e, emissiveIntensity:0.7, roughness:0.4, side:THREE.DoubleSide });
-    var slowMat = new THREE.MeshStandardMaterial({ color:0x7a5a3a, emissive:0x3a2818, emissiveIntensity:0.3, roughness:0.9, side:THREE.DoubleSide });
-    var pegGeom = new THREE.SphereGeometry(1, 12, 10);
-
-    for(var i=0;i<obstacles.length;i++){
-      var o = obstacles[i];
-      if(o.type === 'peg'){
-        var m = new THREE.Mesh(pegGeom, pegMat);
-        m.scale.setScalar(o.radius);
-        m.position.set(o.x, 0, o.z); // y set at placement time
-        o.mesh = m;
-        group.add(m);
-      } else if(o.type === 'rotor'){
-        var barGeom = new THREE.BoxGeometry(o.armLength*2, 0.5, 0.5);
-        var m2 = new THREE.Mesh(barGeom, rotorMat);
-        var hub = new THREE.Mesh(new THREE.SphereGeometry(0.6,10,8), rotorMat);
-        var pivot = new THREE.Group();
-        pivot.add(m2); pivot.add(hub);
-        o.mesh = pivot;
-        group.add(pivot);
-      } else if(o.type === 'boost'){
-        var padGeom = new THREE.PlaneGeometry(o.hw*2, o.len);
-        var m3 = new THREE.Mesh(padGeom, boostMat);
-        m3.rotation.x = -Math.PI/2;
-        o.mesh = m3;
-        group.add(m3);
-      } else if(o.type === 'slow'){
-        var padGeom2 = new THREE.PlaneGeometry(o.hw*2, o.len);
-        var m4 = new THREE.Mesh(padGeom2, slowMat);
-        m4.rotation.x = -Math.PI/2;
-        o.mesh = m4;
-        group.add(m4);
-      }
-    }
-    return group;
-  }
-
-  function placeObstacleMeshes(obstacles, track){
-    for(var i=0;i<obstacles.length;i++){
-      var o = obstacles[i];
-      var y = track.surfaceY(o.z);
-      if(o.type === 'peg'){
-        o.mesh.position.set(o.x, y+o.radius*0.55, o.z);
-      } else if(o.type === 'rotor'){
-        o.mesh.position.set(o.x, y+0.9, o.z);
-      } else if(o.type === 'boost' || o.type === 'slow'){
-        o.mesh.position.set(o.x, y+0.05, o.z);
-      }
-    }
-  }
-
-  /* ===================== BALLS ===================== */
-  function makeBallMesh(colorKey){
-    var geom = new THREE.SphereGeometry(BALL_RADIUS, 24, 18);
-    var mat = new THREE.MeshStandardMaterial({ color: COLORS[colorKey].hex, roughness:0.35, metalness:0.15, emissive: COLORS[colorKey].hex, emissiveIntensity:0.12 });
-    var mesh = new THREE.Mesh(geom, mat);
-    return mesh;
-  }
-
-  function createBalls(track){
-    var balls = {};
-    for(var i=0;i<ORDER.length;i++){
-      var key = ORDER[i];
-      var mesh = makeBallMesh(key);
-      scene.add(mesh);
-      balls[key] = {
-        key:key, mesh:mesh,
-        x: START_OFFSETS[i], z: 0, vx:0, vz:0,
-        radius: BALL_RADIUS,
-        accel: GRAVITY_ACCEL * (0.92 + Math.random()*0.16),
-        finished:false, finishTime:0, place:0,
-        hitPads: {}
-      };
-    }
-    return balls;
-  }
-
-  function resetBalls(balls, track){
-    for(var i=0;i<ORDER.length;i++){
-      var key = ORDER[i];
-      var b = balls[key];
-      b.x = START_OFFSETS[i]; b.z = 0; b.vx = 0; b.vz = 0;
-      b.finished = false; b.finishTime = 0; b.place = 0;
-      b.hitPads = {};
-      b.accel = GRAVITY_ACCEL * (0.92 + Math.random()*0.16);
-      b.mesh.position.set(b.x, track.surfaceY(0)+b.radius, b.z);
-      b.mesh.rotation.set(0,0,0);
-    }
-  }
-
-  /* ===================== GAME STATE ===================== */
-  var track = generateTrack();
-  var trackGroup = buildTrackMesh(track);
-  scene.add(trackGroup);
-  var obstacles = generateObstacles(track);
-  var obstacleGroup = buildObstacleMeshes(obstacles);
-  scene.add(obstacleGroup);
-  placeObstacleMeshes(obstacles, track);
-
-  var balls = createBalls(track);
-  resetBalls(balls, track);
-
-  // finish banner
-  var finishGeom = new THREE.PlaneGeometry(track.halfWidth(-track.trackLength)*2+2, 3);
-  var finishMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.85, side:THREE.DoubleSide });
-  var finishMesh = new THREE.Mesh(finishGeom, finishMat);
-  finishMesh.position.set(track.centerX(-track.trackLength), track.surfaceY(-track.trackLength)+2.2, -track.trackLength);
-  scene.add(finishMesh);
-
-  var selectedColor = null;
-  var isRacing = false;
-  var raceEnded = false;
-  var elapsed = 0;
-  var finishOrder = [];
-  var stallTimer = 0;
-  var bestLeadZ = 0;
-
-  var camPos = new THREE.Vector3(0, track.START_Y+16, 22);
-  var camLook = new THREE.Vector3(0, track.START_Y, -20);
-  camera.position.copy(camPos);
-
-  var idleT = 0;
-
-  /* ===================== PHYSICS ===================== */
-  function nearbyObstacles(z){
-    var list = [];
-    for(var i=0;i<obstacles.length;i++){
-      if(Math.abs(obstacles[i].z - z) < 16) list.push(obstacles[i]);
-    }
-    return list;
-  }
-
-  function pointSegDist(px,pz, ax,az, bx,bz){
-    var vx=bx-ax, vz=bz-az;
-    var wx=px-ax, wz=pz-az;
-    var len2 = vx*vx+vz*vz;
-    var t = len2>0.0001 ? clamp((wx*vx+wz*vz)/len2, 0, 1) : 0;
-    var cx = ax+vx*t, cz = az+vz*t;
-    var dx = px-cx, dz = pz-cz;
-    return { dist: Math.sqrt(dx*dx+dz*dz), nx: dx, nz: dz, t:t };
-  }
-
-  function updateBall(ball, dt){
-    if(ball.finished) return;
-
-    var s = -ball.vz;
-    s += (ball.accel - DRAG*s) * dt;
-    if(s < 0) s = 0;
-    ball.vz = -s;
-
-    var cx = track.centerX(ball.z);
-    var ax = -LATERAL_SPRING*(ball.x-cx) - LATERAL_DAMP*ball.vx;
-    ball.vx += ax*dt;
-
-    ball.x += ball.vx*dt;
-    ball.z += ball.vz*dt;
-
-    var hw = track.halfWidth(ball.z) - ball.radius*0.9;
-    var cx2 = track.centerX(ball.z);
-    if(ball.x < cx2-hw){ ball.x = cx2-hw; ball.vx = Math.abs(ball.vx)*BOUNCE_REST + 0.6; }
-    if(ball.x > cx2+hw){ ball.x = cx2+hw; ball.vx = -Math.abs(ball.vx)*BOUNCE_REST - 0.6; }
-
-    var near = nearbyObstacles(ball.z);
-    for(var i=0;i<near.length;i++){
-      var o = near[i];
-      if(o.type === 'peg'){
-        var dx = ball.x-o.x, dz = ball.z-o.z;
-        var d2 = dx*dx+dz*dz;
-        var minD = ball.radius+o.radius;
-        if(d2 < minD*minD && d2 > 0.0001){
-          var d = Math.sqrt(d2);
-          var nx = dx/d, nz = dz/d;
-          var overlap = minD-d;
-          ball.x += nx*overlap; ball.z += nz*overlap;
-          var vdotn = ball.vx*nx + ball.vz*nz;
-          ball.vx -= (1+BOUNCE_REST)*vdotn*nx;
-          ball.vz -= (1+BOUNCE_REST)*vdotn*nz;
-          ball.vx += (Math.random()*2-1)*1.6;
-          ball.vz *= 0.9;
-        }
-      } else if(o.type === 'rotor'){
-        var tipX = o.x + Math.cos(o.angle)*o.armLength;
-        var tipZ = o.z + Math.sin(o.angle)*o.armLength;
-        var baseX = o.x - Math.cos(o.angle)*o.armLength;
-        var baseZ = o.z - Math.sin(o.angle)*o.armLength;
-        var res = pointSegDist(ball.x, ball.z, baseX, baseZ, tipX, tipZ);
-        var minD2 = ball.radius+0.55;
-        if(res.dist < minD2 && res.dist > 0.0001){
-          var nnx = res.nx/res.dist, nnz = res.nz/res.dist;
-          var overlap2 = minD2-res.dist;
-          ball.x += nnx*overlap2; ball.z += nnz*overlap2;
-          var tangSpeed = o.speed*o.armLength*(res.t*2-1)*0.9;
-          var tanx = -Math.sin(o.angle), tanz = Math.cos(o.angle);
-          ball.vx += nnx*3.2 + tanx*tangSpeed;
-          ball.vz += nnz*3.2 + tanz*tangSpeed;
-        }
-      } else if(o.type === 'boost'){
-        if(Math.abs(ball.z-o.z) < o.len/2 && Math.abs(ball.x-o.x) < o.hw && !ball.hitPads[o.id]){
-          ball.hitPads[o.id] = true;
-          ball.vz -= o.boost;
-        }
-      } else if(o.type === 'slow'){
-        if(Math.abs(ball.z-o.z) < o.len/2 && Math.abs(ball.x-o.x) < o.hw){
-          ball.vz *= (1 - 1.4*dt);
-        }
-      }
-    }
-  }
-
-  // Safety net: if nobody has made real forward progress for a few
-  // seconds (any leftover jam we didn't anticipate), scatter everyone
-  // sideways and give a forward kick so the pack breaks apart.
-  function unstickBalls(){
-    for(var i=0;i<ORDER.length;i++){
-      var b = balls[ORDER[i]];
-      if(b.finished) continue;
-      b.vx += (Math.random()*2-1)*6;
-      b.vz -= 5;
-      b.x += (Math.random()*2-1)*0.8;
-    }
-  }
-
-  function resolveBallCollisions(){
-    for(var i=0;i<ORDER.length;i++){
-      for(var j=i+1;j<ORDER.length;j++){
-        var bi = balls[ORDER[i]], bj = balls[ORDER[j]];
-        if(bi.finished || bj.finished) continue;
-        var dx = bi.x-bj.x, dz = bi.z-bj.z;
-        var d = Math.sqrt(dx*dx+dz*dz);
-        var minD = bi.radius+bj.radius;
-        if(d < minD){
-          // Balls exactly on top of each other: nudge apart on a random
-          // axis so the collision has something to push against.
-          if(d < 0.0001){
-            var randAng = Math.random()*Math.PI*2;
-            dx = Math.cos(randAng)*0.01; dz = Math.sin(randAng)*0.01;
-            d = 0.01;
-          }
-          var nx = dx/d, nz = dz/d;
-          var overlap = (minD-d)/2;
-          var biZBefore = bi.z, bjZBefore = bj.z;
-
-          bi.x += nx*overlap; bi.z += nz*overlap;
-          bj.x -= nx*overlap; bj.z -= nz*overlap;
-
-          // Never let a ball-ball correction push either ball backward
-          // along the track — this is what caused packs of balls to
-          // permanently wedge against each other near the centerline.
-          // Lateral (x) separation is still fully applied.
-          if(bi.z > biZBefore) bi.z = biZBefore;
-          if(bj.z > bjZBefore) bj.z = bjZBefore;
-
-          var vni = bi.vx*nx+bi.vz*nz, vnj = bj.vx*nx+bj.vz*nz;
-          var diff = (vnj-vni)*0.55;
-          bi.vx += diff*nx; bi.vz += diff*nz;
-          bj.vx -= diff*nx; bj.vz -= diff*nz;
-        }
-      }
-    }
-  }
-
-  function updateBallMesh(ball, dt){
-    var y = track.surfaceY(ball.z) + ball.radius;
-    ball.mesh.position.set(ball.x, y, ball.z);
-    var speed = Math.hypot(ball.vx, ball.vz);
-    if(speed > 0.001){
-      var axisX = -ball.vz, axisZ = ball.vx;
-      var alen = Math.hypot(axisX, axisZ) || 1;
-      var axis = new THREE.Vector3(axisX/alen, 0, axisZ/alen);
-      var angle = (speed/ball.radius) * dt;
-      ball.mesh.rotateOnWorldAxis(axis, angle);
-    }
-  }
-
-  /* ===================== CONFETTI ===================== */
-  var confettiParts = [];
-  function spawnConfetti(x,y,z,colorHex){
-    var geom = new THREE.PlaneGeometry(0.5,0.5);
-    for(var i=0;i<26;i++){
-      var mat = new THREE.MeshBasicMaterial({ color: (i%3===0)?colorHex:(Math.random()<0.5?0xffffff:0x7cf7ff), side:THREE.DoubleSide, transparent:true });
-      var m = new THREE.Mesh(geom, mat);
-      m.position.set(x + (Math.random()*2-1)*1.5, y + Math.random()*2, z + (Math.random()*2-1)*1.5);
-      var vel = new THREE.Vector3((Math.random()*2-1)*6, 6+Math.random()*6, (Math.random()*2-1)*6);
-      scene.add(m);
-      confettiParts.push({ mesh:m, vel:vel, life:0, maxLife:1.6+Math.random()*0.6, spin:(Math.random()*2-1)*6 });
-    }
-  }
-  function updateConfetti(dt){
-    for(var i=confettiParts.length-1;i>=0;i--){
-      var p = confettiParts[i];
-      p.life += dt;
-      p.vel.y -= 14*dt;
-      p.mesh.position.addScaledVector(p.vel, dt);
-      p.mesh.rotation.z += p.spin*dt;
-      p.mesh.rotation.x += p.spin*0.6*dt;
-      var t = p.life/p.maxLife;
-      p.mesh.material.opacity = Math.max(0, 1-t);
-      if(p.life >= p.maxLife){
-        scene.remove(p.mesh);
-        p.mesh.geometry.dispose(); p.mesh.material.dispose();
-        confettiParts.splice(i,1);
-      }
-    }
-  }
-
-  /* ===================== HUD ===================== */
-  var hudEl = document.getElementById('hud');
-  var timerPill = document.getElementById('timerPill');
-  var youLabel = document.getElementById('youLabel');
-  var youSwatch = document.getElementById('youSwatch');
-  var progressPanel = document.getElementById('progressPanel');
-  var progressFills = {};
-  var panHint = document.getElementById('panHint');
-  var panHintTimer = null;
-  function hidePanHint(){
-    panHint.classList.add('faded');
-    if(panHintTimer){ clearTimeout(panHintTimer); panHintTimer = null; }
-  }
-  function showPanHint(){
-    panHint.classList.remove('faded');
-    if(panHintTimer) clearTimeout(panHintTimer);
-    panHintTimer = setTimeout(hidePanHint, 4500);
-  }
-
-  function buildProgressPanel(){
-    progressPanel.innerHTML = '';
-    progressFills = {};
-    for(var i=0;i<ORDER.length;i++){
-      var key = ORDER[i];
-      var row = document.createElement('div');
-      row.className = 'progress-row';
-      var rank = document.createElement('div');
-      rank.className = 'rank'; rank.textContent = '-';
-      var sw = document.createElement('div');
-      sw.className = 'swatch'; sw.style.background = '#'+COLORS[key].hex.toString(16).padStart(6,'0');
-      var trackEl = document.createElement('div');
-      trackEl.className = 'progress-track';
-      var fill = document.createElement('div');
-      fill.className = 'progress-fill';
-      fill.style.background = '#'+COLORS[key].hex.toString(16).padStart(6,'0');
-      trackEl.appendChild(fill);
-      row.appendChild(rank); row.appendChild(sw); row.appendChild(trackEl);
-      progressPanel.appendChild(row);
-      progressFills[key] = { fill:fill, rank:rank };
-    }
-  }
-  buildProgressPanel();
-
-  function updateHud(dt){
-    timerPill.textContent = elapsed.toFixed(1)+'s';
-    var ranked = ORDER.slice().sort(function(a,b){
-      var ba=balls[a], bb=balls[b];
-      if(ba.finished && bb.finished) return ba.finishTime-bb.finishTime;
-      if(ba.finished) return -1;
-      if(bb.finished) return 1;
-      return bb.z - ba.z; // more negative z = further along -> bb.z - ba.z gives further first
-    });
-    for(var i=0;i<ranked.length;i++){
-      var key = ranked[i];
-      var b = balls[key];
-      var progress = clamp((-b.z)/track.trackLength, 0, 1);
-      progressFills[key].fill.style.width = (progress*100).toFixed(1)+'%';
-      progressFills[key].rank.textContent = String(i+1);
-    }
-    if(selectedColor){
-      var meRank = ranked.indexOf(selectedColor)+1;
-      youLabel.textContent = 'You: ' + ordinal(meRank);
-    }
-  }
-
-  function ordinal(n){
-    var s = ['th','st','nd','rd'], v = n%100;
-    return n + (s[(v-20)%10] || s[v] || s[0]);
-  }
-
-  /* ===================== CAMERA ===================== */
-  // Auto-follow computes camPos/camLook as before; the player can drag to
-  // orbit around that follow point on top of the automatic motion.
-  var orbitYaw = 0;
-  var orbitPitch = 0;
-  var ORBIT_MIN_PITCH = -0.68;
-  var ORBIT_MAX_PITCH = 1.15;
-  var dragging = false;
-  var lastPX = 0, lastPY = 0;
-  var dragVelYaw = 0, dragVelPitch = 0;
-  var userHasPanned = false;
-
-  function updateCameraRacing(dt){
-    var minZ = 0, sumX = 0;
-    for(var i=0;i<ORDER.length;i++){
-      var b = balls[ORDER[i]];
-      if(b.z < minZ) minZ = b.z;
-      sumX += b.x;
-    }
-    var avgX = sumX/ORDER.length;
-    var leadZ = minZ;
-    var targetLook = new THREE.Vector3(avgX, track.surfaceY(leadZ)+1.5, leadZ-6);
-    var targetPos = new THREE.Vector3(avgX*0.7 + track.centerX(leadZ+16)*0.3, track.surfaceY(leadZ+16)+10, leadZ+17);
-
-    var damp = 1 - Math.exp(-dt*3.2);
-    camPos.lerp(targetPos, damp);
-    camLook.lerp(targetLook, damp);
-  }
-
-  function updateCameraIdle(dt){
-    idleT += dt;
-    var radius = 26, height = track.START_Y + 14;
-    var targetPos = new THREE.Vector3(Math.sin(idleT*0.18)*radius, height, 18+Math.cos(idleT*0.18)*10);
-    var targetLook = new THREE.Vector3(track.centerX(-40), track.surfaceY(-40), -40);
-    var damp = 1 - Math.exp(-dt*1.5);
-    camPos.lerp(targetPos, damp);
-    camLook.lerp(targetLook, damp);
-  }
-
-  function updateOrbitInertia(){
-    if(!dragging){
-      if(Math.abs(dragVelYaw) > 0.00005 || Math.abs(dragVelPitch) > 0.00005){
-        orbitYaw += dragVelYaw;
-        orbitPitch = clamp(orbitPitch + dragVelPitch, ORBIT_MIN_PITCH, ORBIT_MAX_PITCH);
-        dragVelYaw *= 0.92;
-        dragVelPitch *= 0.92;
-      }
-    }
-  }
-
-  // Applies the manual orbit offset on top of the auto-follow camPos/camLook
-  // and pushes the final transform to the real camera. Call once per frame.
-  function applyCameraTransform(){
-    var offset = camPos.clone().sub(camLook);
-    var radius = Math.max(offset.length(), 0.5);
-    var baseYaw = Math.atan2(offset.x, offset.z);
-    var basePitch = clamp(Math.asin(clamp(offset.y/radius, -1, 1)), ORBIT_MIN_PITCH, ORBIT_MAX_PITCH);
-
-    var finalYaw = baseYaw + orbitYaw;
-    var finalPitch = clamp(basePitch + orbitPitch, ORBIT_MIN_PITCH, ORBIT_MAX_PITCH);
-
-    var horizR = radius*Math.cos(finalPitch);
-    var fx = camLook.x + horizR*Math.sin(finalYaw);
-    var fy = camLook.y + radius*Math.sin(finalPitch);
-    var fz = camLook.z + horizR*Math.cos(finalYaw);
-
-    camera.position.set(fx, fy, fz);
-    camera.lookAt(camLook);
-  }
-
-  /* ---- drag-to-pan input (mouse + touch via Pointer Events) ---- */
-  var domEl = renderer.domElement;
-  domEl.style.touchAction = 'none';
-  var ORBIT_SENS = 0.0055;
-
-  function onPointerDown(e){
-    dragging = true;
-    lastPX = e.clientX; lastPY = e.clientY;
-    dragVelYaw = 0; dragVelPitch = 0;
-    if(domEl.setPointerCapture){ try{ domEl.setPointerCapture(e.pointerId); }catch(err){} }
-  }
-  function onPointerMove(e){
-    if(!dragging) return;
-    var dx = e.clientX - lastPX;
-    var dy = e.clientY - lastPY;
-    lastPX = e.clientX; lastPY = e.clientY;
-    var dYaw = -dx*ORBIT_SENS;
-    var dPitch = dy*ORBIT_SENS;
-    orbitYaw += dYaw;
-    orbitPitch = clamp(orbitPitch + dPitch, ORBIT_MIN_PITCH, ORBIT_MAX_PITCH);
-    dragVelYaw = dYaw;
-    dragVelPitch = dPitch;
-    if(Math.abs(dx) > 2 || Math.abs(dy) > 2){
-      userHasPanned = true;
-      hidePanHint();
-    }
-  }
-  function onPointerUp(){ dragging = false; }
-
-  domEl.addEventListener('pointerdown', onPointerDown);
-  domEl.addEventListener('pointermove', onPointerMove);
-  domEl.addEventListener('pointerup', onPointerUp);
-  domEl.addEventListener('pointercancel', onPointerUp);
-  domEl.addEventListener('pointerleave', onPointerUp);
-
-  function resetOrbit(){
-    orbitYaw = 0; orbitPitch = 0;
-    dragVelYaw = 0; dragVelPitch = 0;
-  }
-
-  /* ===================== UI WIRING ===================== */
-  var startScreen = document.getElementById('startScreen');
-  var resultScreen = document.getElementById('resultScreen');
-  var startBtn = document.getElementById('startBtn');
-  var againBtn = document.getElementById('againBtn');
-  var tapHint = document.getElementById('tapHint');
-  var ballGrid = document.getElementById('ballGrid');
-
-  ballGrid.addEventListener('click', function(e){
-    var choice = e.target.closest('.ball-choice');
-    if(!choice) return;
-    var color = choice.getAttribute('data-color');
-    selectedColor = color;
-    var all = ballGrid.querySelectorAll('.ball-choice');
-    for(var i=0;i<all.length;i++) all[i].classList.remove('selected');
-    choice.classList.add('selected');
-    startBtn.disabled = false;
-    startBtn.textContent = 'Race the ' + COLORS[color].name;
-  });
-
-  function regenerateCourse(){
-    scene.remove(trackGroup); disposeGroup(trackGroup);
-    scene.remove(obstacleGroup); disposeGroup(obstacleGroup);
-    scene.remove(finishMesh); finishMesh.geometry.dispose(); finishMesh.material.dispose();
-
-    track = generateTrack();
-    trackGroup = buildTrackMesh(track);
-    scene.add(trackGroup);
-    obstacles = generateObstacles(track);
-    obstacleGroup = buildObstacleMeshes(obstacles);
-    scene.add(obstacleGroup);
-    placeObstacleMeshes(obstacles, track);
-
-    finishGeom = new THREE.PlaneGeometry(track.halfWidth(-track.trackLength)*2+2, 3);
-    finishMesh = new THREE.Mesh(finishGeom, finishMat);
-    finishMesh.position.set(track.centerX(-track.trackLength), track.surfaceY(-track.trackLength)+2.2, -track.trackLength);
-    scene.add(finishMesh);
-
-    resetBalls(balls, track);
-    resetOrbit();
-  }
-
-  function disposeGroup(group){
-    group.traverse(function(obj){
-      if(obj.geometry) obj.geometry.dispose();
-      if(obj.material) obj.material.dispose();
-    });
-  }
-
-  function startRace(){
-    startScreen.classList.add('hidden');
-    tapHint.style.display = 'none';
-    hudEl.classList.remove('hidden');
-    youSwatch.style.background = '#'+COLORS[selectedColor].hex.toString(16).padStart(6,'0');
-    youLabel.textContent = 'You: —';
-    isRacing = true;
-    raceEnded = false;
-    elapsed = 0;
-    finishOrder = [];
-    stallTimer = 0;
-    bestLeadZ = 0;
-    resetOrbit();
-    userHasPanned = false;
-    showPanHint();
-  }
-
-  function endRace(){
-    isRacing = false;
-    raceEnded = true;
-    hudEl.classList.add('hidden');
-
-    var ranked = ORDER.slice().sort(function(a,b){
-      var ba=balls[a], bb=balls[b];
-      if(ba.finished && bb.finished) return ba.finishTime-bb.finishTime;
-      if(ba.finished) return -1;
-      if(bb.finished) return 1;
-      return bb.z - ba.z;
-    });
-
-    var standingsEl = document.getElementById('standings');
-    standingsEl.innerHTML = '';
-    var meRank = ranked.indexOf(selectedColor)+1;
-    for(var i=0;i<ranked.length;i++){
-      var key = ranked[i];
-      var b = balls[key];
-      var row = document.createElement('div');
-      row.className = 'standing-row' + (key===selectedColor ? ' me' : '');
-      var place = document.createElement('div');
-      place.className = 'place'; place.textContent = '#'+(i+1);
-      var sw = document.createElement('div');
-      sw.className = 'swatch'; sw.style.background = '#'+COLORS[key].hex.toString(16).padStart(6,'0');
-      var name = document.createElement('div');
-      name.className = 'name'; name.textContent = COLORS[key].name + (key===selectedColor ? ' (you)' : '');
-      var time = document.createElement('div');
-      time.className = 'time'; time.textContent = b.finished ? b.finishTime.toFixed(1)+'s' : 'DNF';
-      row.appendChild(place); row.appendChild(sw); row.appendChild(name); row.appendChild(time);
-      standingsEl.appendChild(row);
-    }
-
-    var titleEl = document.getElementById('resultTitle');
-    var kickerEl = document.getElementById('resultKicker');
-    var subEl = document.getElementById('resultSub');
-    if(meRank === 1){
-      kickerEl.textContent = 'VICTORY';
-      titleEl.textContent = COLORS[selectedColor].name + ' wins!';
-      subEl.textContent = 'Your marble crossed the line first. Nicely tumbled.';
-      var winB = balls[ranked[0]];
-      spawnConfetti(winB.x, track.surfaceY(winB.z)+2, winB.z, COLORS[ranked[0]].hex);
-    } else {
-      kickerEl.textContent = 'RACE OVER';
-      titleEl.textContent = COLORS[selectedColor].name + ' placed ' + ordinal(meRank);
-      subEl.textContent = COLORS[ranked[0]].name + ' took the win this time.';
-    }
-
-    resultScreen.classList.remove('hidden');
-  }
-
-  startBtn.addEventListener('click', function(){
-    if(!selectedColor) return;
-    startRace();
-  });
-
-  againBtn.addEventListener('click', function(){
-    resultScreen.classList.add('hidden');
-    regenerateCourse();
-    startScreen.classList.remove('hidden');
-    tapHint.style.display = 'block';
-  });
-
-  /* ===================== MAIN LOOP ===================== */
-  var clock = new THREE.Clock();
-
-  function animate(){
-    requestAnimationFrame(animate);
-    var dt = Math.min(clock.getDelta(), 0.05);
-
-    // animate rotors always (nice ambience even on start screen)
-    for(var i=0;i<obstacles.length;i++){
-      var o = obstacles[i];
-      if(o.type === 'rotor'){
-        o.angle += o.speed*dt;
-        o.mesh.rotation.y = -o.angle;
-      }
-    }
-
-    if(isRacing){
-      elapsed += dt;
-      var allDone = true;
-      for(var k=0;k<ORDER.length;k++){
-        var b = balls[ORDER[k]];
-        updateBall(b, dt);
-      }
-      resolveBallCollisions();
-      for(var k2=0;k2<ORDER.length;k2++){
-        var b2 = balls[ORDER[k2]];
-        if(!b2.finished && b2.z <= -track.trackLength){
-          b2.finished = true;
-          b2.finishTime = elapsed;
-          finishOrder.push(b2.key);
-        }
-        updateBallMesh(b2, dt);
-        if(!b2.finished) allDone = false;
-      }
-      updateHud(dt);
-      updateCameraRacing(dt);
-
-      var leadZ = 0;
-      for(var kk=0;kk<ORDER.length;kk++){
-        var bl = balls[ORDER[kk]];
-        if(bl.z < leadZ) leadZ = bl.z;
-      }
-      if(leadZ < bestLeadZ - 0.4){
-        bestLeadZ = leadZ;
-        stallTimer = 0;
-      } else {
-        stallTimer += dt;
-        if(stallTimer > STALL_TIMEOUT){
-          unstickBalls();
-          stallTimer = 0;
-        }
-      }
-
-      if(allDone || elapsed >= MAX_RACE_TIME){
-        endRace();
-      }
-    } else {
-      updateCameraIdle(dt);
-      for(var k3=0;k3<ORDER.length;k3++){
-        updateBallMesh(balls[ORDER[k3]], 0);
-      }
-    }
-
-    updateOrbitInertia();
-    applyCameraTransform();
-    updateConfetti(dt);
-    renderer.render(scene, camera);
-  }
-  animate();
-
+  $('#aud').addEventListener('play', () => notify('play'));
+  $('#aud').addEventListener('pause', () => notify('pause'));
+  ['aud', 'vid', 'img'].forEach((id) => $('#' + id).addEventListener('error', () => log(id + ': failed to load the stream')));
+
+  render();
 })();
 </script>
 </body>
-  </html>
+</html>

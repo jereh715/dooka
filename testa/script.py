@@ -1,7 +1,7 @@
 import os
 import sys
 import threading
-import zipfile
+import tarfile
 import urllib.request
 import urllib.parse
 import importlib
@@ -31,6 +31,13 @@ os.makedirs(LOCAL_LIB_DIR, exist_ok=True)
 if LOCAL_LIB_DIR not in sys.path:
     sys.path.insert(0, LOCAL_LIB_DIR)
 
+# Also dynamically add any extracted yt-dlp subfolders if already present
+for d in os.listdir(LOCAL_LIB_DIR):
+    if d.startswith("yt-dlp-"):
+        inner = os.path.join(LOCAL_LIB_DIR, d, "yt_dlp")
+        if os.path.exists(inner) and inner not in sys.path:
+            sys.path.insert(0, inner)
+
 INSTALLATION_STATUS = {
     "is_installed": False,
     "is_installing": False,
@@ -39,33 +46,63 @@ INSTALLATION_STATUS = {
 }
 
 # ---------------------------------------------------------
-# 2. Dynamic Package Management for yt-dlp (Fixed for Android)
+# 2. Dynamic Package Management for yt-dlp (Fixed via PyPI Tarball)
 # ---------------------------------------------------------
 def install_ytdlp_background():
     global INSTALLATION_STATUS
     INSTALLATION_STATUS["is_installing"] = True
-    INSTALLATION_STATUS["message"] = "Downloading yt-dlp engine..."
+    INSTALLATION_STATUS["message"] = "Fetching yt-dlp package info..."
 
     try:
-        # yt-dlp standalone release is a single Python script file
-        url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
-        target_script = os.path.join(LOCAL_LIB_DIR, "yt_dlp.py")
+        pypi_url = "https://pypi.org/pypi/yt-dlp/json"
+        req = urllib.request.Request(pypi_url, headers={'User-Agent': 'Mozilla/5.0'})
         
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=25) as response, open(target_script, 'wb') as out_file:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode())
+            releases = data.get("releases", {})
+            latest_version = data.get("info", {}).get("version")
+            
+            tar_url = None
+            for file_info in releases.get(latest_version, []):
+                if file_info.get("packagetype") == "sdist":
+                    tar_url = file_info.get("url")
+                    break
+            
+            if not tar_url:
+                urls = [f["url"] for f in releases.get(latest_version, []) if f.get("url")]
+                tar_url = urls[0] if urls else None
+
+            if not tar_url:
+                raise Exception("Could not find yt-dlp download link on PyPI.")
+
+        INSTALLATION_STATUS["message"] = "Downloading yt-dlp source..."
+        target_tar = os.path.join(LOCAL_LIB_DIR, "yt_dlp.tar.gz")
+        
+        req_tar = urllib.request.Request(tar_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req_tar, timeout=30) as response, open(target_tar, 'wb') as out_file:
             out_file.write(response.read())
 
-        # Invalidate caches so Python detects the new module
+        INSTALLATION_STATUS["message"] = "Extracting package..."
+        with tarfile.open(target_tar, "r:gz") as tar_ref:
+            tar_ref.extractall(LOCAL_LIB_DIR)
+
+        extracted_dirs = [os.path.join(LOCAL_LIB_DIR, d) for d in os.listdir(LOCAL_LIB_DIR) if d.startswith("yt-dlp-")]
+        if extracted_dirs:
+            inner_pkg = os.path.join(extracted_dirs[0], "yt_dlp")
+            if os.path.exists(inner_pkg) and inner_pkg not in sys.path:
+                sys.path.insert(0, inner_pkg)
+
+        if os.path.exists(target_tar):
+            os.remove(target_tar)
+
         importlib.invalidate_caches()
-        
-        # Test import
         import yt_dlp
         
         INSTALLATION_STATUS["is_installed"] = True
         INSTALLATION_STATUS["is_installing"] = False
         INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
-        print("[YT-DLP]: Successfully installed standalone engine.")
-        
+        print("[YT-DLP]: Successfully installed via PyPI tarball.")
+
     except Exception as e:
         INSTALLATION_STATUS["is_installing"] = False
         INSTALLATION_STATUS["is_installed"] = False
@@ -196,7 +233,6 @@ def stream_and_trigger_download(params=None):
 # 5. Recommendation Engine (Diversified & Filtered)
 # ---------------------------------------------------------
 def _clean_title(title):
-    """Strips meta tags like (Official Video), [Lyrics], HD, etc."""
     title = re.sub(r'[\(\[\{].*?[\)\]\}]', '', title)
     return title.strip().lower()
 
@@ -336,7 +372,6 @@ def get_lyrics(params=None):
 
     query = params.get("query").strip()
     
-    # Provider 1: LRCLIB API
     try:
         url = f"https://lrclib.net/api/search?q={urllib.parse.quote(query)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -367,7 +402,6 @@ def get_lyrics(params=None):
     except Exception as e:
         print(f"[DEBUG] LRCLIB Fetch Error: {e}")
 
-    # Provider 2: MegaloBiz
     try:
         search_url = f"https://www.megalobiz.com/searchall?qv={urllib.parse.quote(query)}"
         req = urllib.request.Request(search_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -386,7 +420,6 @@ def get_lyrics(params=None):
     except Exception as e:
         print(f"[DEBUG] MegaloBiz Fetch Error: {e}")
 
-    # Provider 3: Fallback Plaintext Scraper
     try:
         genius_url = f"https://genius.com/api/search/multi?q={urllib.parse.quote(query)}"
         req = urllib.request.Request(genius_url, headers={'User-Agent': 'Mozilla/5.0'})

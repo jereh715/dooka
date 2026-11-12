@@ -39,69 +39,52 @@ INSTALLATION_STATUS = {
 }
 
 # ---------------------------------------------------------
-# 2. Dynamic Package Management for yt-dlp
+# 2. Dynamic Package Management for yt-dlp (Fixed for Android)
 # ---------------------------------------------------------
 def install_ytdlp_background():
     global INSTALLATION_STATUS
     INSTALLATION_STATUS["is_installing"] = True
-    INSTALLATION_STATUS["message"] = "Downloading yt-dlp..."
+    INSTALLATION_STATUS["message"] = "Downloading yt-dlp engine..."
 
     try:
-        import runpy
-        sys.argv = ['pip', 'install', '--target', LOCAL_LIB_DIR, 'yt-dlp', '--no-deps', '--quiet']
-        runpy.run_module('pip', run_name='__main__')
-        
-        importlib.invalidate_caches()
-        import yt_dlp
-        INSTALLATION_STATUS["is_installed"] = True
-        INSTALLATION_STATUS["is_installing"] = False
-        INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
-        return
-    except SystemExit as e:
-        if e.code == 0:
-            importlib.invalidate_caches()
-            INSTALLATION_STATUS["is_installed"] = True
-            INSTALLATION_STATUS["is_installing"] = False
-            INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
-            return
-    except Exception as e1:
-        print(f"[RUNPY PIP FAILED]: {e1}")
-
-    try:
-        INSTALLATION_STATUS["message"] = "Downloading zip archive..."
+        # yt-dlp standalone release is a single Python script file
         url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
-        target_zip = os.path.join(LOCAL_LIB_DIR, "yt_dlp_zip.zip")
+        target_script = os.path.join(LOCAL_LIB_DIR, "yt_dlp.py")
         
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=15) as response, open(target_zip, 'wb') as out_file:
+        with urllib.request.urlopen(req, timeout=25) as response, open(target_script, 'wb') as out_file:
             out_file.write(response.read())
-        
-        with zipfile.ZipFile(target_zip, 'r') as zip_ref:
-            zip_ref.extractall(LOCAL_LIB_DIR)
 
-        if os.path.exists(target_zip):
-            os.remove(target_zip)
-
+        # Invalidate caches so Python detects the new module
         importlib.invalidate_caches()
+        
+        # Test import
         import yt_dlp
+        
         INSTALLATION_STATUS["is_installed"] = True
         INSTALLATION_STATUS["is_installing"] = False
         INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
-    except Exception as e2:
+        print("[YT-DLP]: Successfully installed standalone engine.")
+        
+    except Exception as e:
         INSTALLATION_STATUS["is_installing"] = False
         INSTALLATION_STATUS["is_installed"] = False
-        INSTALLATION_STATUS["error"] = str(e2)
-        INSTALLATION_STATUS["message"] = f"Engine error: {str(e2)}"
+        INSTALLATION_STATUS["error"] = str(e)
+        INSTALLATION_STATUS["message"] = f"Engine error: {str(e)}"
+        print(f"[YT-DLP INSTALL FAILED]: {e}")
 
 def check_or_start_install():
     global INSTALLATION_STATUS
+    if INSTALLATION_STATUS.get("is_installed"):
+        return True
+        
     try:
         import yt_dlp
         INSTALLATION_STATUS["is_installed"] = True
-        INSTALLATION_STATUS["message"] = "Ready"
+        INSTALLATION_STATUS["message"] = "yt-dlp Ready!"
         return True
     except ImportError:
-        if not INSTALLATION_STATUS["is_installing"]:
+        if not INSTALLATION_STATUS.get("is_installing", False):
             thread = threading.Thread(target=install_ytdlp_background)
             thread.daemon = True
             thread.start()
@@ -240,7 +223,6 @@ def get_recommendations(params=None):
     elif query:
         current_title = _clean_title(query)
 
-    # Build targeted search query for artist tracks or general genre recommendations
     if artist and artist.lower() != "unknown artist":
         search_target = f"ytsearch15:{artist} top tracks music"
     elif query:
@@ -281,7 +263,6 @@ def get_recommendations(params=None):
                 raw_title = entry.get('title') or 'Unknown Title'
                 clean_t = _clean_title(raw_title)
 
-                # Skip duplicate versions or songs containing the main track title
                 if clean_t in seen_titles or (current_title and current_title in clean_t):
                     continue
 

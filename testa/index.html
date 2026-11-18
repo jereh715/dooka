@@ -42,7 +42,10 @@
   </div>
 
 <script>
-const API = '/api/testa/';
+// Runner blueprint is mounted at /runner, and the app id comes from the URL
+// (/mini_apps/<app_id>/index.html), so this works under any folder name.
+const APP = location.pathname.split('/')[2];
+const API = `/runner/api/${APP}/`;
 const $ = id => document.getElementById(id);
 const statusEl = $('status');
 

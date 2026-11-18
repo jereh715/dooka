@@ -2,8 +2,8 @@
 Audio Streamer miniapp backend.
 
 Called by the page through:
-    POST /api/testa/search   {"query": "..."}
-    POST /api/testa/resolve  {"url": "..."}
+    POST /runner/api/testa/search   {"query": "..."}
+    POST /runner/api/testa/resolve  {"url": "..."}
 
 `log(...)` is injected by runner.py, so messages show up in the debug console.
 yt_dlp is imported lazily inside each function so a missing package returns

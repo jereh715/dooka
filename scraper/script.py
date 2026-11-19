@@ -1,13 +1,14 @@
 import os
 import sys
 import json
-import urllib.request
-import urllib.error
+import requests
+from bs4 import BeautifulSoup
+
 
 def scrape_jumia(payload=None):
     """
-    Fetches raw HTML source code from jumia.co.ke using standard library urllib.
-    No external dependencies (like 'requests') required!
+    Fetches raw HTML source code from jumia.co.ke using requests and parses/prettifies
+    it with BeautifulSoup while preserving the original return structure.
     """
     url = "https://www.jumia.co.ke/"
     headers = {
@@ -17,32 +18,38 @@ def scrape_jumia(payload=None):
     }
 
     try:
-        req = urllib.request.Request(url, headers=headers)
         # Timeout set to 12 seconds
-        with urllib.request.urlopen(req, timeout=12) as response:
-            html_content = response.read().decode('utf-8', errors='ignore')
-            return {
-                "status_code": response.getcode(),
-                "url": response.geturl(),
-                "length": len(html_content),
-                "html": html_content
-            }
+        response = requests.get(url, headers=headers, timeout=12)
+        response.raise_for_status()
 
-    except urllib.error.HTTPError as e:
+        soup = BeautifulSoup(response.content.decode("utf-8", errors="ignore"), "html.parser")
+        html_content = soup.prettify()
+
         return {
-            "status_code": e.code,
-            "error": f"HTTP Error: {e.reason}"
+            "status_code": response.status_code,
+            "url": response.url,
+            "length": len(html_content),
+            "html": html_content
         }
-    except urllib.error.URLError as e:
+
+    except requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else 500
+        reason = e.response.reason if e.response is not None else str(e)
+        return {
+            "status_code": status_code,
+            "error": f"HTTP Error: {reason}"
+        }
+    except requests.exceptions.RequestException as e:
         return {
             "status_code": 500,
-            "error": f"URL Error: {e.reason}"
+            "error": f"Request Error: {str(e)}"
         }
     except Exception as e:
         return {
             "status_code": 500,
             "error": str(e)
         }
+
 
 def handle_request(action, payload=None):
     """
